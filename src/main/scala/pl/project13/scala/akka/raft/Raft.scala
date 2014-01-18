@@ -7,15 +7,22 @@ import scala.concurrent.Future
 import scala.collection.immutable
 
 import protocol._
+import java.util.concurrent.TimeUnit
 
 trait Raft extends LoggingFSM[RaftState, Metadata] {
   this: Actor =>
+
 
   import context.dispatcher
 
   type Command <: AnyRef
   type Commands = immutable.Seq[Command]
   type Member = ActorRef
+
+  private val config = context.system.settings.config
+
+
+  val HeartbeatTimerName = "heartbeat-timer"
 
   // user-land API -----------------------------------------------------------------------------------------------------
   /** Called when a command is determined by Raft to be safe to apply */
@@ -26,11 +33,14 @@ trait Raft extends LoggingFSM[RaftState, Metadata] {
   // must be included in leader's heartbeat
   def highestCommittedTermNr: Term = Term.Zero
 
-  val replicatedLog = ReplicatedLog.empty[Command]
+  var replicatedLog = ReplicatedLog.empty[Command]
 
-  def electionTimeout = randomElectionTimeout(from = 150.millis, to = 300.millis)
-  
-  val heartbeatInterval = (150 + (electionTimeout.toMillis - 150 / 2)).millis
+  def electionTimeout: FiniteDuration = randomElectionTimeout(
+    from = config.getDuration("akka.raft.election-timeout.min", TimeUnit.MILLISECONDS).millis,
+    to = config.getDuration("akka.raft.election-timeout.max", TimeUnit.MILLISECONDS).millis
+  )
+
+  val heartbeatInterval: FiniteDuration = config.getDuration("akka.raft.heartbeat-interval", TimeUnit.MILLISECONDS).millis
 
   var currentTerm = Term.Zero
 
@@ -64,11 +74,9 @@ trait Raft extends LoggingFSM[RaftState, Metadata] {
       stay() forMax electionTimeout
 
     // need to start an election
-    case Event(StateTimeout, data: Meta) =>
+    case Event(StateTimeout, m: Meta) =>
       log.info(s"Election timeout reached")
-
-      self ! BeginElection
-      goto(Candidate) using data.forNewElection
+      beginElection(m)
   }
 
   when(Candidate, stateTimeout = electionTimeout) {
@@ -82,15 +90,13 @@ trait Raft extends LoggingFSM[RaftState, Metadata] {
 
       stay() using data.withOneMoreVote forMax electionTimeout
 
-    case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: ElectionMeta) if term < currentTerm => {
+    case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: ElectionMeta) if term < currentTerm =>
       sender ! Reject
       stay()
-    }
-    
-    case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: ElectionMeta) if m.canVote => {
+
+    case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: ElectionMeta) if m.canVote =>
       sender ! Vote(currentTerm)
       stay()
-    }
 
     case Event(Vote(term), data: ElectionMeta) if data.withOneMoreVote.hasMajority =>
       log.info(s"Received enough votes to be majority (${data.withOneMoreVote.votesReceived} of ${data.members.size})")
@@ -110,6 +116,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] {
     case Event(AppendEntries(term, leader, prevLogIndex, prevLogTerm, entries), m) if term >= currentTerm =>
       log.info("Got valid AppendEntries, falling back to Follower state and replaying message")
       self ! AppendEntries(term, leader, prevLogIndex, prevLogTerm, entries)
+      setStateTimeout(Candidate, Some(electionTimeout))
       goto(Follower) forMax electionTimeout
 
     // append for Term from too far in the future
@@ -128,8 +135,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] {
   when(Leader) {
     case Event(ElectedAsLeader, m: LeaderMeta) =>
       prepareEachFollowersNextIndex(m.others)
-      sendHeartbeat(m.others)
-      setTimer("hearbeat-timer", SendHeartbeat, heartbeatInterval, repeat = true)
+      startHeartbeat(m.others)
       stay()
 
     case Event(SendHeartbeat, m: LeaderMeta) =>
@@ -141,6 +147,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] {
       stay()
 
     case Event(AppendRejected(term), m: LeaderMeta) if term > currentTerm =>
+      stopHeartbeat(m.others)
       stepDown(m) // since there seems to be another leader!
 
     case Event(AppendRejected(term), m: LeaderMeta) =>
@@ -162,6 +169,9 @@ trait Raft extends LoggingFSM[RaftState, Metadata] {
   }
 
   onTransition {
+    case Follower -> Candidate =>
+      self ! BeginElection
+
     case Candidate -> Leader =>
       self ! ElectedAsLeader
   }
@@ -172,6 +182,15 @@ trait Raft extends LoggingFSM[RaftState, Metadata] {
 
   def prepareEachFollowersNextIndex(followers: immutable.Seq[ActorRef]) {
     nextIndex = LogIndexMap.initialize(followers, replicatedLog.lastIndex)
+  }
+
+  def stopHeartbeat(members: Vector[ActorRef]) {
+    cancelTimer(HeartbeatTimerName)
+  }
+
+  def startHeartbeat(members: Vector[ActorRef]) {
+    sendHeartbeat(members)
+    setTimer(HeartbeatTimerName, SendHeartbeat, heartbeatInterval, repeat = true)
   }
 
   def sendHeartbeat(members: Vector[ActorRef]) {
@@ -193,6 +212,9 @@ trait Raft extends LoggingFSM[RaftState, Metadata] {
   }
 
   // named state changes
+  /** Start a new election */
+  def beginElection(m: Meta) = goto(Candidate) using m.forNewElection
+
   /** Stop being the Leader */
   def stepDown(m: LeaderMeta) = goto(Follower) using m.forFollower
 

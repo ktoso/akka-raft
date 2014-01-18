@@ -9,7 +9,7 @@ class LeaderElectionTest extends RaftSpec {
 
   behavior of "Candidate"
 
-  val memberCount = 3
+  val memberCount = 5
 
   it should "be elected as Leader when recieved majority of votes" in {
     // given
