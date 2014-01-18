@@ -4,9 +4,8 @@ import akka.actor.{ActorRef, Actor}
 import scala.collection.immutable.Seq
 import scala.collection.mutable.ListBuffer
 
-class RaftActor(nodes: Seq[ActorRef]) extends Actor with RaftClient {
+class RaftActor extends Actor with Raft {
   type Command = String
-  var allNodes: Seq[ActorRef] = nodes
 
   var words = ListBuffer[String]()
   

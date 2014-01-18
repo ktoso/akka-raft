@@ -18,8 +18,10 @@ trait RaftProtocol {
 
   case class AppendEntries[T <: AnyRef](
     currentTerm: Term,
-    log: Entries[T],
-    votedFor: Option[ActorRef] = None
+    leader: ActorRef,
+    prevLogIndex: Int,
+    prevLogTerm: Term,
+    entries: Entries[T]
   ) extends RaftMessage
 
 }
