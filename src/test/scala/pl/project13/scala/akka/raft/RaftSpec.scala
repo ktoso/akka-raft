@@ -66,7 +66,7 @@ abstract class RaftSpec extends TestKit(ActorSystem("raft-test")) with FlatSpecL
 
   override def afterAll() {
     super.afterAll()
-//    shutdown(system)
+    shutdown(system)
   }
 
 }

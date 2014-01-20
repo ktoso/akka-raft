@@ -11,12 +11,14 @@ class LeaderElectionTest extends RaftSpec {
   // note: these run sequential, so when the 2 test runs, we already have a leader,
   // so we can kill it, and see it the cluster re-elects a new one properly
 
-  it should "be elected as Leader when recieved majority of votes" in {
+  it should "electe initial Leader" in {
     // given
-    awaitElectedLeader()
+    info("Before election: ")
+    infoMemberStates()
 
     // when
-
+    awaitElectedLeader()
+    info("After election: ")
     infoMemberStates()
 
     // then
@@ -25,7 +27,7 @@ class LeaderElectionTest extends RaftSpec {
     members.count(_.stateName == Follower) should equal (4)
   }
 
-  it should "elect a new leader if the initial one dies" in {
+  it should "elect replacement Leader if current Leader dies" in {
     // given
     infoMemberStates()
 
@@ -36,11 +38,31 @@ class LeaderElectionTest extends RaftSpec {
 
     // then
     awaitElectedLeader()
+    info("New leader elected: ")
     infoMemberStates()
 
     members.count(_.stateName == Leader) should equal (1)
     members.count(_.stateName == Candidate) should equal (0)
     members.count(_.stateName == Follower) should equal (3)
+  }
+
+  it should "be able to maintain the same leader for a long time" in {
+    // when
+    val memberStates1 = members.sortBy(_.path.elements.last).map(_.stateName)
+    Thread.sleep(50)
+    val memberStates2 = members.sortBy(_.path.elements.last).map(_.stateName)
+    Thread.sleep(50)
+    val memberStates3 = members.sortBy(_.path.elements.last).map(_.stateName)
+    Thread.sleep(50)
+    val memberStates4 = members.sortBy(_.path.elements.last).map(_.stateName)
+
+    info("Maintained state:")
+    infoMemberStates()
+
+    // then
+    memberStates1 should equal (memberStates2)
+    memberStates1 should equal (memberStates3)
+    memberStates1 should equal (memberStates4)
   }
 
 }

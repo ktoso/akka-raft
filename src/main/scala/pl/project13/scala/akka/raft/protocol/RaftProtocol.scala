@@ -1,7 +1,6 @@
 package pl.project13.scala.akka.raft.protocol
 
 import akka.actor.ActorRef
-import scala.collection.immutable
 import pl.project13.scala.akka.raft.{Entry, Term}
 
 trait RaftProtocol {
@@ -14,7 +13,7 @@ trait RaftProtocol {
     lastLogIndex: Int
   ) extends RaftMessage
 
-  type Entries[T <: AnyRef] = immutable.Seq[Entry[T]]
+  type Entries[T <: AnyRef] = List[Entry[T]]
 
   case class AppendEntries[T <: AnyRef](
     currentTerm: Term,

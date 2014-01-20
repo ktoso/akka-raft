@@ -56,12 +56,15 @@ trait Raft extends LoggingFSM[RaftState, Metadata] {
   when(Follower) {
     
     // election
-    case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: Meta) if m.canVote && term > m.currentTerm =>
+    case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: Meta) if m.canVote && term >= m.currentTerm =>
+
       log.info(s"Voting for $candidate in $term")
       sender ! Vote(m.currentTerm)
-      stay()
+
+      stay() using m.copy(votedFor = Some(candidate))
 
     case Event(RequestVote(term, candidateId, lastLogTerm, lastLogIndex), m: Meta) =>
+      log.info(s"Rejecting vote for $candidate, and $term, currentTerm: ${m.currentTerm}, already voted for: ${m.votedFor}")
       sender ! Reject(m.currentTerm)
       stay()
       
@@ -72,8 +75,14 @@ trait Raft extends LoggingFSM[RaftState, Metadata] {
       if replicatedLog.isConsistentWith(prevLogIndex, prevLogTerm) =>
       stayAcceptingHeartbeat() using m.copy(currentTerm = term)
 
+    case Event(AppendEntries(term, leader, _, _, Nil), m: Meta) =>
+      log.debug(s"Heartbeat... ${term} / ${m.currentTerm}")
+      stayAcceptingHeartbeat()
+
     // logs don't match, don't append but refresh timer
     case Event(AppendEntries(term, leader, prevLogIndex, prevLogTerm, entries: Entries[Command]), m: Meta) =>
+      // todo should tell Leader I'm behind
+      log.info(s"Log seems not consistent with mine, Leader: ${term}; Follower: ${m.currentTerm}")
       stayAcceptingHeartbeat()
 
     // need to start an election
@@ -93,7 +102,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] {
       stay() using m.incTerm.incVote
 
     case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: ElectionMeta) if term < m.currentTerm =>
-      sender ! Reject
+      sender ! Reject(m.currentTerm)
       stay()
 
     case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: ElectionMeta) if m.canVote =>
@@ -117,7 +126,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] {
     // log appending -- todo step down and handle in Follower
     case Event(AppendEntries(term, leader, prevLogIndex, prevLogTerm, entries), m) if term >= m.currentTerm =>
       log.info("Got valid AppendEntries, falling back to Follower state and replaying message")
-      self ! AppendEntries(term, leader, prevLogIndex, prevLogTerm, entries)
+      self forward AppendEntries(term, leader, prevLogIndex, prevLogTerm, entries)
 
       goto(Follower)
 
@@ -130,10 +139,10 @@ trait Raft extends LoggingFSM[RaftState, Metadata] {
       goto(Follower)
 
     // ending election due to timeout
-    case Event(StateTimeout, data: ElectionMeta) =>
+    case Event(ElectionTimeout, m: ElectionMeta) =>
       log.debug("Voting timeout, starting a new election...")
       self ! BeginElection
-      stay() using data.forFollower.forNewElection
+      stay() using m.forFollower.forNewElection
   }
 
   when(Leader) {
@@ -178,12 +187,12 @@ trait Raft extends LoggingFSM[RaftState, Metadata] {
       self ! BeginElection
       resetElectionTimeout()
 
-    case Leader -> Follower =>
-      resetElectionTimeout()
-
     case Candidate -> Leader =>
       self ! ElectedAsLeader()
       cancelElectionTimeout()
+
+    case _ -> Follower =>
+      resetElectionTimeout()
   }
 
   onTermination {
