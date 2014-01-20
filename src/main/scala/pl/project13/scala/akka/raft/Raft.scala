@@ -9,9 +9,9 @@ import scala.collection.immutable
 import protocol._
 import java.util.concurrent.TimeUnit
 
+
 trait Raft extends LoggingFSM[RaftState, Metadata] {
   this: Actor =>
-
 
   import context.dispatcher
 
@@ -21,8 +21,8 @@ trait Raft extends LoggingFSM[RaftState, Metadata] {
 
   private val config = context.system.settings.config
 
-
   val HeartbeatTimerName = "heartbeat-timer"
+  val ElectionTimeoutTimerName = "election-timer"
 
   // user-land API -----------------------------------------------------------------------------------------------------
   /** Called when a command is determined by Raft to be safe to apply */
@@ -31,80 +31,82 @@ trait Raft extends LoggingFSM[RaftState, Metadata] {
 
 
   // must be included in leader's heartbeat
-  def highestCommittedTermNr: Term = Term.Zero
+  def highestCommittedTermNr = Term.Zero
 
   var replicatedLog = ReplicatedLog.empty[Command]
 
-  def electionTimeout: FiniteDuration = randomElectionTimeout(
-    from = config.getDuration("akka.raft.election-timeout.min", TimeUnit.MILLISECONDS).millis,
-    to = config.getDuration("akka.raft.election-timeout.max", TimeUnit.MILLISECONDS).millis
+  val minElectionTimeout = config.getDuration("akka.raft.election-timeout.min", TimeUnit.MILLISECONDS).millis
+  val maxElectionTimeout = config.getDuration("akka.raft.election-timeout.max", TimeUnit.MILLISECONDS).millis
+  def nextElectionTimeout: FiniteDuration = randomElectionTimeout(
+    from = minElectionTimeout, to = maxElectionTimeout 
   )
 
   val heartbeatInterval: FiniteDuration = config.getDuration("akka.raft.heartbeat-interval", TimeUnit.MILLISECONDS).millis
 
-  var currentTerm = Term.Zero
-
-  /** Needs to be on each Term change */
-  var votedFor: ActorRef = null
-
-  // todo could be maps
   var nextIndex = LogIndexMap.initialize(Vector.empty, replicatedLog.lastIndex)
   var matchIndex = LogIndexMap.initialize(Vector.empty, 0)
 
+  override def preStart() {
+    val timeout = resetElectionTimeout()
+    log.debug("Initial election timeout: " + timeout)
+  }
+
   startWith(Follower, Meta.initial)
 
-  when(Follower, stateTimeout = electionTimeout) {
+  when(Follower) {
     
     // election
-    case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: Meta) if m.canVote && term > currentTerm =>
+    case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: Meta) if m.canVote && term > m.currentTerm =>
       log.info(s"Voting for $candidate in $term")
-      sender ! Vote(currentTerm)
+      sender ! Vote(m.currentTerm)
       stay()
 
     case Event(RequestVote(term, candidateId, lastLogTerm, lastLogIndex), m: Meta) =>
-      sender ! Reject(currentTerm)
+      sender ! Reject(m.currentTerm)
       stay()
       
     // end of election
 
     // append entries
-    case Event(AppendEntries(term, leader, prevLogIndex, prevLogTerm, entries: Entries[Command]), data)
+    case Event(AppendEntries(term, leader, prevLogIndex, prevLogTerm, entries: Entries[Command]), m: Meta)
       if replicatedLog.isConsistentWith(prevLogIndex, prevLogTerm) =>
+      stayAcceptingHeartbeat() using m.copy(currentTerm = term)
 
-      stay() forMax electionTimeout
+    // logs don't match, don't append but refresh timer
+    case Event(AppendEntries(term, leader, prevLogIndex, prevLogTerm, entries: Entries[Command]), m: Meta) =>
+      stayAcceptingHeartbeat()
 
     // need to start an election
-    case Event(StateTimeout, m: Meta) =>
+    case Event(ElectionTimeout, m: Meta) =>
       log.info(s"Election timeout reached")
       beginElection(m)
   }
 
-  when(Candidate, stateTimeout = electionTimeout) {
+  when(Candidate) {
     // election
-    case Event(BeginElection, data: ElectionMeta) =>
-      currentTerm = currentTerm + 1
-      log.debug(s"Initializing election for $currentTerm")
+    case Event(BeginElection, m: ElectionMeta) =>
+      log.debug(s"Initializing election for ${m.currentTerm}")
 
-      val request = RequestVote(currentTerm, self, replicatedLog.lastTerm, replicatedLog.lastIndex)
-      data.membersExceptSelf foreach { _ ! request }
+      val request = RequestVote(m.currentTerm, self, replicatedLog.lastTerm, replicatedLog.lastIndex)
+      m.membersExceptSelf foreach { _ ! request }
 
-      stay() using data.withOneMoreVote forMax electionTimeout
+      stay() using m.incTerm.incVote
 
-    case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: ElectionMeta) if term < currentTerm =>
+    case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: ElectionMeta) if term < m.currentTerm =>
       sender ! Reject
       stay()
 
     case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: ElectionMeta) if m.canVote =>
-      sender ! Vote(currentTerm)
+      sender ! Vote(m.currentTerm)
       stay()
 
-    case Event(Vote(term), data: ElectionMeta) if data.withOneMoreVote.hasMajority =>
-      log.info(s"Received enough votes to be majority (${data.withOneMoreVote.votesReceived} of ${data.members.size})")
+    case Event(Vote(term), data: ElectionMeta) if data.incVote.hasMajority =>
+      log.info(s"Received enough votes to be majority (${data.incVote.votesReceived} of ${data.members.size})")
       goto(Leader) using data.forLeader
 
     case Event(Vote(term), data: ElectionMeta) =>
-      log.info(s"Received vote from $voter, now up to ${data.withOneMoreVote.votesReceived}")
-      stay() using data.withOneMoreVote
+      log.info(s"Received vote from $voter, now up to ${data.incVote.votesReceived}")
+      stay() using data.incVote
 
     case Event(Reject(term), m: ElectionMeta) =>
       log.debug(s"Rejected vote by $voter, in $term")
@@ -113,41 +115,44 @@ trait Raft extends LoggingFSM[RaftState, Metadata] {
     // end of election
 
     // log appending -- todo step down and handle in Follower
-    case Event(AppendEntries(term, leader, prevLogIndex, prevLogTerm, entries), m) if term >= currentTerm =>
+    case Event(AppendEntries(term, leader, prevLogIndex, prevLogTerm, entries), m) if term >= m.currentTerm =>
       log.info("Got valid AppendEntries, falling back to Follower state and replaying message")
       self ! AppendEntries(term, leader, prevLogIndex, prevLogTerm, entries)
-      setStateTimeout(Candidate, Some(electionTimeout))
-      goto(Follower) forMax electionTimeout
 
-    // append for Term from too far in the future
-    case Event(AppendEntries(term, leader, prevLogIndex, prevLogTerm, entries: Entries[Command]), data) if isInconsistentTerm(term) =>
+      goto(Follower)
+
+    // todo should act differently
+    case Event(AppendEntries(term, leader, prevLogIndex, prevLogTerm, entries: Entries[Command]), m)
+        if isInconsistentTerm(m.currentTerm, term) =>
       log.info(s"Got AppendEntries from stale $term, from $leader, not adding entries. AppendSuccessful.")
-      sender ! AppendSuccessful(currentTerm)
-      goto(Follower) forMax electionTimeout
+      sender ! AppendSuccessful(m.currentTerm)
+
+      goto(Follower)
 
     // ending election due to timeout
     case Event(StateTimeout, data: ElectionMeta) =>
       log.debug("Voting timeout, starting a new election...")
       self ! BeginElection
-      stay() using data.forFollower.forNewElection forMax electionTimeout
+      stay() using data.forFollower.forNewElection
   }
 
   when(Leader) {
-    case Event(ElectedAsLeader, m: LeaderMeta) =>
+    case Event(ElectedAsLeader(), m: LeaderMeta) =>
+      log.info("Became leader!")
       prepareEachFollowersNextIndex(m.others)
-      startHeartbeat(m.others)
+      startHeartbeat(m.currentTerm, m.others)
       stay()
 
     case Event(SendHeartbeat, m: LeaderMeta) =>
-      sendHeartbeat(m.others)
+      sendHeartbeat(m.currentTerm, m.others)
       stay()
 
     case Event(AppendSuccessful(term), _) =>
       // todo probably not needed
       stay()
 
-    case Event(AppendRejected(term), m: LeaderMeta) if term > currentTerm =>
-      stopHeartbeat(m.others)
+    case Event(AppendRejected(term), m: LeaderMeta) if term > m.currentTerm =>
+      stopHeartbeat()
       stepDown(m) // since there seems to be another leader!
 
     case Event(AppendRejected(term), m: LeaderMeta) =>
@@ -156,7 +161,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] {
 
       // todo continue sending to follower, to make it catch up
       // todo should include term a command came from, right?
-      follower ! AppendEntries(currentTerm, self, replicatedLog.lastIndex, replicatedLog.lastTerm, replicatedLog.entriesFrom(logIndexToSend))
+      follower ! AppendEntries(m.currentTerm, self, replicatedLog.lastIndex, replicatedLog.lastTerm, replicatedLog.entriesFrom(logIndexToSend))
 
       stay()
   }
@@ -171,9 +176,19 @@ trait Raft extends LoggingFSM[RaftState, Metadata] {
   onTransition {
     case Follower -> Candidate =>
       self ! BeginElection
+      resetElectionTimeout()
+
+    case Leader -> Follower =>
+      resetElectionTimeout()
 
     case Candidate -> Leader =>
-      self ! ElectedAsLeader
+      self ! ElectedAsLeader()
+      cancelElectionTimeout()
+  }
+
+  onTermination {
+    case stop =>
+      stopHeartbeat()
   }
 
   // helpers -----------------------------------------------------------------------------------------------------------
@@ -184,17 +199,32 @@ trait Raft extends LoggingFSM[RaftState, Metadata] {
     nextIndex = LogIndexMap.initialize(followers, replicatedLog.lastIndex)
   }
 
-  def stopHeartbeat(members: Vector[ActorRef]) {
+  def stopHeartbeat() {
     cancelTimer(HeartbeatTimerName)
   }
 
-  def startHeartbeat(members: Vector[ActorRef]) {
-    sendHeartbeat(members)
+  def startHeartbeat(currentTerm: Term, members: Vector[ActorRef]) {
+    sendHeartbeat(currentTerm, members)
+    log.info(s"Starting hearbeat, with interval: $heartbeatInterval")
     setTimer(HeartbeatTimerName, SendHeartbeat, heartbeatInterval, repeat = true)
   }
 
-  def sendHeartbeat(members: Vector[ActorRef]) {
+  def sendHeartbeat(currentTerm: Term, members: Vector[ActorRef]) {
     members foreach { _ ! AppendEntries(currentTerm, self, replicatedLog.lastIndex, replicatedLog.lastTerm, Nil) }
+  }
+  
+  def cancelElectionTimeout() {
+    cancelTimer(ElectionTimeoutTimerName)
+  }
+
+    def resetElectionTimeout(): FiniteDuration = {
+    cancelTimer(ElectionTimeoutTimerName)
+
+    val timeout = nextElectionTimeout
+//    log.debug("Resetting election timeout: " + timeout)
+    setTimer(ElectionTimeoutTimerName, ElectionTimeout, timeout, repeat = false)
+
+    timeout
   }
 
   def appendToLog(x: Any): Future[Unit] = {
@@ -213,18 +243,22 @@ trait Raft extends LoggingFSM[RaftState, Metadata] {
 
   // named state changes
   /** Start a new election */
-  def beginElection(m: Meta) = goto(Candidate) using m.forNewElection
+  def beginElection(m: Meta) = {
+    resetElectionTimeout()
+    goto(Candidate) using m.forNewElection
+  }
 
   /** Stop being the Leader */
   def stepDown(m: LeaderMeta) = goto(Follower) using m.forFollower
 
+  /** Stay in current state and reset the election timeout */
+  def stayAcceptingHeartbeat() = {
+    resetElectionTimeout()
+    stay()
+  }
 
-
-  def isStaleTerm(term: Term): Boolean = term < currentTerm
   /** `true` if this follower is at `Term(2)`, yet the incoming term is `t > Term(3)` */
-  def isInconsistentTerm(term: Term): Boolean = term < currentTerm
-  def isCurrentOrLaterTerm(term: Term): Boolean = term >= currentTerm
-  def nextTerm(): Unit = currentTerm = currentTerm + 1
+  def isInconsistentTerm(currentTerm: Term, term: Term): Boolean = term < currentTerm
 
   // sender aliases, for readability
   @inline def follower = sender()
