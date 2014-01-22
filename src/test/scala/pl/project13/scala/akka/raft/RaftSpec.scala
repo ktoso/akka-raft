@@ -38,8 +38,6 @@ abstract class RaftSpec extends TestKit(ActorSystem("raft-test")) with FlatSpecL
     super.beforeEach()
 
     probe = TestProbe()
-    subscribeElectedLeader()
-    subscribeBeginElection()
   }
 
   override def afterEach() {

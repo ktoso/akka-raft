@@ -13,6 +13,8 @@ class LeaderElectionTest extends RaftSpec {
 
   it should "electe initial Leader" in {
     // given
+    subscribeElectedLeader()
+
     info("Before election: ")
     infoMemberStates()
 
@@ -29,6 +31,8 @@ class LeaderElectionTest extends RaftSpec {
 
   it should "elect replacement Leader if current Leader dies" in {
     // given
+    subscribeElectedLeader()
+
     infoMemberStates()
 
     // when
@@ -47,6 +51,9 @@ class LeaderElectionTest extends RaftSpec {
   }
 
   it should "be able to maintain the same leader for a long time" in {
+    // given
+    subscribeElectedLeader()
+
     // when
     val memberStates1 = members.sortBy(_.path.elements.last).map(_.stateName)
     Thread.sleep(50)

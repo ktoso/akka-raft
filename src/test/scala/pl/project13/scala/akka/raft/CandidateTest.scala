@@ -27,6 +27,8 @@ class CandidateTest extends RaftSpec with BeforeAndAfterEach
 
   it should "start a new election round if electionTimeout reached, and no one became Leader" in {
     // given
+    subscribeBeginElection()
+
     candidate.setState(Candidate, data)
 
     // when
