@@ -39,6 +39,7 @@ abstract class RaftSpec extends TestKit(ActorSystem("raft-test")) with FlatSpecL
 
     probe = TestProbe()
     subscribeElectedLeader()
+    subscribeBeginElection()
   }
 
   override def afterEach() {
@@ -66,6 +67,12 @@ abstract class RaftSpec extends TestKit(ActorSystem("raft-test")) with FlatSpecL
 
   def awaitElectedLeader()(implicit probe: TestProbe): Unit =
     probe.expectMsgClass(max = 3.seconds, classOf[ElectedAsLeader])
+
+  def subscribeBeginElection()(implicit probe: TestProbe): Unit =
+    system.eventStream.subscribe(probe.ref, BeginElection.getClass)
+
+  def awaitBeginElection()(implicit probe: TestProbe): Unit =
+    probe.expectMsgClass(max = 3.seconds, BeginElection.getClass)
 
   // end of await stuff ------------------------------------------------------------------------------------------------
 
