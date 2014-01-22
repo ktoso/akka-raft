@@ -4,7 +4,7 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class ReplicatedLogTest extends FlatSpec with Matchers {
   
-  behavior of "Log"
+  behavior of "ReplicatedLog"
 
   var replicatedLog = ReplicatedLog.empty[String]
 
@@ -22,8 +22,30 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
     replicatedLog = replicatedLog.append(t2, command2, None)
 
     // then
-    frozenLog.entries should have length 1 // check for immutability
-    replicatedLog.entries should have length 3
+    frozenLog.entries should have length 0 // check for immutability
+    replicatedLog.entries should have length 2
+  }
+
+  "comittedEntries" should "contain entries up until the last committed one" in {
+    // given
+    replicatedLog = ReplicatedLog.empty[String]
+    replicatedLog = replicatedLog.append(Term(1), "a", None)
+    replicatedLog = replicatedLog.append(Term(2), "b", None)
+    replicatedLog = replicatedLog.append(Term(3), "a", None)
+
+    // when
+    val comittedLog = replicatedLog.commit(2)
+
+    // then, should have thrown
+    replicatedLog.lastIndex should equal (comittedLog.lastIndex)
+    replicatedLog.lastTerm should equal (comittedLog.lastTerm)
+
+    replicatedLog.commitedIndex should equal (0)
+    comittedLog.commitedIndex should equal (2)
+
+    comittedLog.committedEntries should have length (2)
+    comittedLog.committedEntries.head should equal (Entry("a", Term(1), None))
+    comittedLog.committedEntries.tail.head should equal (Entry("b", Term(2), None))
   }
 
 }
