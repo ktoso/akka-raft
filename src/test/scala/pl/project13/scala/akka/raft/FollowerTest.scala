@@ -60,4 +60,16 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
     expectMsg(Reject(Term(2)))
   }
 
+  it should "become a Candidate if the electionTimeout has elapsed" in {
+    // given
+    follower.setState(Follower, data)
+
+    // when
+    info("After awaiting for election timeout...")
+    Thread.sleep(electionTimeoutMax.toMillis)
+
+    // then
+    follower.stateName should equal (Candidate)
+  }
+
 }

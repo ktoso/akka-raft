@@ -4,6 +4,7 @@ import org.scalatest._
 import akka.testkit.{TestProbe, TestFSMRef, TestKit}
 import akka.actor._
 import scala.concurrent.duration._
+import java.util.concurrent.TimeUnit
 
 abstract class RaftSpec extends TestKit(ActorSystem("raft-test")) with FlatSpecLike with Matchers
   with BeforeAndAfterAll with BeforeAndAfterEach {
@@ -14,6 +15,10 @@ abstract class RaftSpec extends TestKit(ActorSystem("raft-test")) with FlatSpecL
   private var _members: Vector[TestFSMRef[RaftState, Metadata, RaftActor with EventStreamAllMessages]] = _
 
   def memberCount: Int
+
+  val config = system.settings.config
+  val electionTimeoutMin = config.getDuration("akka.raft.election-timeout.min", TimeUnit.MILLISECONDS).millis
+  val electionTimeoutMax = config.getDuration("akka.raft.election-timeout.max", TimeUnit.MILLISECONDS).millis
 
   implicit var probe: TestProbe = _
 
