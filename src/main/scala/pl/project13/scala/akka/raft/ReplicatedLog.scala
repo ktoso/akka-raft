@@ -23,7 +23,9 @@ case class ReplicatedLog[T <: AnyRef](
   def lastTerm: Term = entries.maxBy(_.term.termNr).term
 
   // log actions
-  def commit(n: Int) = copy(commitedIndex = n) // todo persist too, right?
+  def commit(n: Int): ReplicatedLog[T] =
+    copy(commitedIndex = n) // todo persist too, right?
+
   def append(term: Term, command: T, client: Option[ActorRef]): ReplicatedLog[T] =
     copy(entries = entries :+ Entry(command, term, client))
 
@@ -34,11 +36,22 @@ case class ReplicatedLog[T <: AnyRef](
   def committedEntries = entries.slice(0, commitedIndex)
 
   def notCommittedEntries = entries.slice(commitedIndex + 1, entries.length)
+}
+
+class EmptyReplicatedLog[T <: AnyRef] extends ReplicatedLog[T](Vector.empty, 0, 0) {
+  override def lastTerm = Term(0)
+  override def lastIndex = 0
+
+  override def commit(n: Int): ReplicatedLog[T] =
+    super.commit(n)
+
+  override def append(term: Term, command: T, client: Option[ActorRef]): ReplicatedLog[T] =
+    super.append(term, command, client)
 
 }
 
 object ReplicatedLog {
-  def empty[T <: AnyRef] = ReplicatedLog[T](Vector.empty, 0, 0)
+  def empty[T <: AnyRef]: ReplicatedLog[T] = new EmptyReplicatedLog[T]
 }
 
 case class Entry[T <: AnyRef](
