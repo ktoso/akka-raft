@@ -19,7 +19,8 @@ trait StateMetadata {
     def membersExceptSelf(implicit self: ActorRef) = members filterNot { _ == self}
 
     /** A member can only vote once during one Term */
-    def canVote = votes.get(currentTerm).isEmpty
+    def canVoteIn(term: Term) = term >= currentTerm && votes.get(term).isEmpty
+
     /** A member can only vote once during one Term */
     def cannotVote = votes.get(currentTerm).isDefined
 
@@ -35,8 +36,8 @@ trait StateMetadata {
     // transition helpers
     def forNewElection: ElectionMeta = ElectionMeta(self, currentTerm.next, 0, members, votes)
 
-    def withVoteFor(candidate: ActorRef) = {
-      copy(votes = votes)
+    def withVote(term: Term, candidate: ActorRef) = {
+      copy(votes = votes updated (term, candidate))
     }
   }
 

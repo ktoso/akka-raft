@@ -23,6 +23,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
   // must be included in leader's heartbeat
   def highestCommittedTermNr = Term.Zero
 
+  // todo or move to Meta
   var replicatedLog = ReplicatedLog.empty[Command]
 
   val minElectionTimeout = config.getDuration("akka.raft.election-timeout.min", TimeUnit.MILLISECONDS).millis
@@ -34,7 +35,8 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
 
   val heartbeatInterval: FiniteDuration = config.getDuration("akka.raft.heartbeat-interval", TimeUnit.MILLISECONDS).millis
 
-  // todo make val and mutable?
+  // todo so mutable or not......
+  // todo or move to Meta
   var nextIndex = LogIndexMap.initialize(Vector.empty, replicatedLog.lastIndex)
   var matchIndex = LogIndexMap.initialize(Vector.empty, -1)
 
@@ -48,12 +50,13 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
   when(Follower) {
     
     // election
-    case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: Meta) if m.canVote && term >= m.currentTerm =>
+    case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: Meta)
+      if m.canVoteIn(term) =>
 
       log.info(s"Voting for $candidate in $term")
       sender ! Vote(m.currentTerm)
 
-      stay() using m.withVoteFor(candidate)
+      stay() using m.withVote(term, candidate)
 
     case Event(RequestVote(term, candidateId, lastLogTerm, lastLogIndex), m: Meta) =>
       log.info(s"Rejecting vote for $candidate, and $term, currentTerm: ${m.currentTerm}, already voted for: ${m.votes}")
@@ -109,14 +112,6 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
 
       val voteForMyself = m.incVote
       stay() using voteForMyself
-
-    case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: ElectionMeta) if term < m.currentTerm =>
-      sender ! Reject(m.currentTerm)
-      stay()
-
-    case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: ElectionMeta) if m.canVote =>
-      sender ! Vote(m.currentTerm)
-      stay()
 
     // todo if existing record, but is different value, rollback one value from log
 
@@ -210,7 +205,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
         self,
         replicatedLog.lastIndex,
         replicatedLog.lastTerm,
-        replicatedLog.entriesFrom(logIndexToSend)
+        replicatedLog.entriesBatchFrom(logIndexToSend)
       )
 
       stay()
@@ -271,7 +266,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
 
   def replicateLog(m: LeaderMeta) {
     m.others foreach { member =>
-      val entries = replicatedLog.entriesFrom(nextIndex.valueFor(member))
+      val entries = replicatedLog.entriesBatchFrom(nextIndex.valueFor(member))
       val msg = AppendEntries(m.currentTerm, self, replicatedLog.prevIndex, replicatedLog.prevTerm, entries)
 
       member ! msg

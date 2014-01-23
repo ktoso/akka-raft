@@ -9,6 +9,7 @@ final case class Term(termNr: Long) extends AnyVal {
   def <(otherTerm: Term): Boolean = this.termNr < otherTerm.termNr
 
   def >=(otherTerm: Term): Boolean = this.termNr >= otherTerm.termNr
+  def <=(otherTerm: Term): Boolean = this.termNr <= otherTerm.termNr
 }
 
 object Term {

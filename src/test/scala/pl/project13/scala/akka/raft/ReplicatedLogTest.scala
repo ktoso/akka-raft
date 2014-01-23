@@ -30,19 +30,20 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
     // given
     var replicatedLog = ReplicatedLog.empty[String]
     replicatedLog = ReplicatedLog.empty[String]
-    replicatedLog = replicatedLog.append(Term(1), None, "a")
-    replicatedLog = replicatedLog.append(Term(2), None, "b")
-    replicatedLog = replicatedLog.append(Term(3), None, "a")
+    replicatedLog = replicatedLog.append(Term(1), None, "a") // 0
+    replicatedLog = replicatedLog.append(Term(2), None, "b") // 1
+    replicatedLog = replicatedLog.append(Term(3), None, "a") // 2
 
     // when
-    val comittedLog = replicatedLog.commit(2)
+    val comittedIndex = 2
+    val comittedLog = replicatedLog.commit(comittedIndex)
 
-    // then, should have thrown
+    // then
     replicatedLog.lastIndex should equal (comittedLog.lastIndex)
     replicatedLog.lastTerm should equal (comittedLog.lastTerm)
 
-    replicatedLog.commitedIndex should equal (0)
-    comittedLog.commitedIndex should equal (2)
+    replicatedLog.commitedIndex should equal (-1) // nothing ever comitted
+    comittedLog.commitedIndex should equal (comittedIndex)
 
     comittedLog.committedEntries should have length (2)
     comittedLog.committedEntries.head should equal (Entry("a", Term(1), None))
@@ -113,7 +114,7 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
     replicatedLog = replicatedLog.append(Term(3), None, "d") // t3, 3
 
     // when
-    val lastTwo = replicatedLog.entriesFrom(0)
+    val lastTwo = replicatedLog.entriesBatchFrom(1)
 
     // then
     lastTwo should have length 2

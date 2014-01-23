@@ -37,8 +37,8 @@ case class ReplicatedLog[T <: AnyRef](
 
   def apply(idx: Int): Entry[T] = entries(idx)
 
-  /** from index, but excluding at that index */
-  def entriesFrom(idx: Int, howMany: Int = 5) = entries.slice(idx + 1, idx + 1 + howMany)
+  /** @param fromExcluding index from which to start the slice (excluding the entry at that index) */
+  def entriesBatchFrom(fromExcluding: Int, howMany: Int = 5) = entries.slice(fromExcluding + 1, fromExcluding + 1 + howMany)
 
   def committedEntries = entries.slice(0, commitedIndex)
 
