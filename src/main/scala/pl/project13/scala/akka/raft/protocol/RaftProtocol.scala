@@ -7,6 +7,9 @@ import scala.collection.immutable
 trait RaftProtocol {
   sealed trait RaftMessage extends Message[Raft]
 
+  /** Used by RaftClients to write to the replicated log */
+  case class Write[T <: AnyRef](client: ActorRef, cmd: T) extends RaftMessage
+
   case class RequestVote(
     term: Term,
     candidateId: ActorRef,
@@ -14,14 +17,12 @@ trait RaftProtocol {
     lastLogIndex: Int
   ) extends RaftMessage
 
-  type Entries[T <: AnyRef] = immutable.Seq[Entry[T]]
-
   case class AppendEntries[T <: AnyRef](
     currentTerm: Term,
     leader: ActorRef,
     prevLogIndex: Int,
     prevLogTerm: Term,
-    entries: Entries[T]
+    entries: immutable.Seq[T]
   ) extends RaftMessage
 
 }

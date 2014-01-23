@@ -4,4 +4,4 @@ package object protocol
   extends RaftStates
   with RaftProtocol
   with InternalProtocol
-  with InternalData
+  with StateMetadata

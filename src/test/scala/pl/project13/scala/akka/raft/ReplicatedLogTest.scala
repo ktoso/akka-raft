@@ -6,10 +6,10 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
   
   behavior of "ReplicatedLog"
 
-  var replicatedLog = ReplicatedLog.empty[String]
-
   it should "should contain commands and terms when they were recieved by leader" in {
     // given
+    var replicatedLog = ReplicatedLog.empty[String]
+
     val t1 = Term(1)
     val command1 = "a"
 
@@ -28,6 +28,7 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
 
   "comittedEntries" should "contain entries up until the last committed one" in {
     // given
+    var replicatedLog = ReplicatedLog.empty[String]
     replicatedLog = ReplicatedLog.empty[String]
     replicatedLog = replicatedLog.append(Term(1), "a", None)
     replicatedLog = replicatedLog.append(Term(2), "b", None)
@@ -46,6 +47,61 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
     comittedLog.committedEntries should have length (2)
     comittedLog.committedEntries.head should equal (Entry("a", Term(1), None))
     comittedLog.committedEntries.tail.head should equal (Entry("b", Term(2), None))
+  }
+
+  "isConsistentWith" should "be consistent for valid append within a term" in {
+    // given
+    var replicatedLog = ReplicatedLog.empty[String]
+    replicatedLog = replicatedLog.append(Term(1), "a", None) // t1, 0
+    replicatedLog = replicatedLog.append(Term(1), "b", None) // t1, 1
+
+    // when / then
+    replicatedLog.isConsistentWith(Term(1), 0) should equal (false)
+    replicatedLog.isConsistentWith(Term(1), 1) should equal (true)
+  }
+
+  it should "be consistent with itself, from 1 write in the past" in {
+    // given
+    val emptyLog = ReplicatedLog.empty[String]
+    var replicatedLog = ReplicatedLog.empty[String]
+    replicatedLog = replicatedLog.append(Term(1), "a", None) // t1, 0
+
+    // when
+    val isConsistent = emptyLog.isConsistentWith(replicatedLog.prevTerm, replicatedLog.prevIndex)
+
+    // then
+    isConsistent should equal (true)
+  }
+  it should "be consistent for valid append across a term" in {
+    // given
+    var replicatedLog = ReplicatedLog.empty[String]
+    replicatedLog = replicatedLog.append(Term(1), "a", None) // t1, 0
+    replicatedLog = replicatedLog.append(Term(1), "b", None) // t1, 1
+    replicatedLog = replicatedLog.append(Term(2), "b", None) // t2, 2
+    replicatedLog = replicatedLog.append(Term(3), "b", None) // t3, 3
+
+    // when / then
+    replicatedLog.isConsistentWith(Term(1), 0) should equal (false)
+    replicatedLog.isConsistentWith(Term(1), 1) should equal (false)
+    replicatedLog.isConsistentWith(Term(1), 2) should equal (false)
+    replicatedLog.isConsistentWith(Term(2), 2) should equal (false)
+    replicatedLog.isConsistentWith(Term(2), 3) should equal (false)
+    replicatedLog.isConsistentWith(Term(3), 2) should equal (false)
+    replicatedLog.isConsistentWith(Term(3), 3) should equal (true)
+  }
+
+  "prevTerm / prevIndex" should "be Term(0) / -1 after first write" in {
+    // given
+    var replicatedLog = ReplicatedLog.empty[String]
+    replicatedLog = replicatedLog.append(Term(1), "a", None) // t1, 0
+
+    // when
+    val prevTerm = replicatedLog.prevTerm
+    val prevIndex = replicatedLog.prevIndex
+
+    // then
+    prevTerm should equal (Term(0))
+    prevIndex should equal (-1)
   }
 
 }

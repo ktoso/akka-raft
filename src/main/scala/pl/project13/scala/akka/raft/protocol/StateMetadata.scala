@@ -3,23 +3,25 @@ package pl.project13.scala.akka.raft.protocol
 import akka.actor.ActorRef
 import pl.project13.scala.akka.raft.Term
 
-trait InternalData {
+trait StateMetadata {
+
+  type Candidate = ActorRef
 
   sealed trait Metadata {
     def self: ActorRef
-    def votedFor: Option[ActorRef]
+    def votes: Map[Term, Candidate]
     def currentTerm: Term
     def members: Vector[ActorRef]
-    lazy val others = members filterNot { _ == self }
+    val others = members filterNot { _ == self }
 
 
     /** Since I'm the Leader "everyone but myself" */
     def membersExceptSelf(implicit self: ActorRef) = members filterNot { _ == self}
 
     /** A member can only vote once during one Term */
-    def canVote = votedFor.isEmpty
+    def canVote = votes.get(currentTerm).isEmpty
     /** A member can only vote once during one Term */
-    def cannotVote = votedFor.isDefined
+    def cannotVote = votes.get(currentTerm).isDefined
 
   }
 
@@ -27,15 +29,14 @@ trait InternalData {
     self: ActorRef,
     currentTerm: Term,
     members: Vector[ActorRef],
-    votedFor: Option[ActorRef] = None
+    votes: Map[Term, Candidate]
   ) extends Metadata {
     
     // transition helpers
-    def forNewElection: ElectionMeta = ElectionMeta(self, currentTerm.next, 0, members, None)
+    def forNewElection: ElectionMeta = ElectionMeta(self, currentTerm.next, 0, members, votes)
 
     def withVoteFor(candidate: ActorRef) = {
-      require(canVote, "Tried to vote twice!")
-      copy(votedFor = Some(candidate))
+      copy(votes = votes)
     }
   }
 
@@ -44,7 +45,7 @@ trait InternalData {
     currentTerm: Term,
     votesReceived: Int,
     members: Vector[ActorRef],
-    votedFor: Option[ActorRef] = None
+    votes: Map[Term, Candidate]
   ) extends Metadata {
 
     def hasMajority = votesReceived > members.size / 2
@@ -52,10 +53,11 @@ trait InternalData {
     // transistion helpers
     def incVote                          = copy(votesReceived = votesReceived + 1)
     def incTerm                          = copy(currentTerm = currentTerm.next)
-    def withVoteFor(candidate: ActorRef) = copy(votedFor = Some(candidate))
+    def withVoteFor(candidate: ActorRef) = copy(votes = votes + (currentTerm -> candidate))
 
-    def forLeader: LeaderMeta = LeaderMeta(self, currentTerm, members)
-    def forFollower: Meta     = Meta(self, currentTerm, members, None)
+    def forLeader: LeaderMeta        = LeaderMeta(self, currentTerm, members)
+    def forFollower: Meta            = Meta(self, currentTerm, members, Map.empty)
+    def forNewElection: ElectionMeta = this.forFollower.forNewElection
   }
 
   case class LeaderMeta(
@@ -64,12 +66,12 @@ trait InternalData {
     members: Vector[ActorRef]
   ) extends Metadata {
 
-    val votedFor = None
+    val votes = Map.empty[Term, Candidate]
 
-    def forFollower: Meta = Meta(self, currentTerm, members)
+    def forFollower: Meta = Meta(self, currentTerm, members, Map.empty)
   }
 
   object Meta {
-    def initial(implicit self: ActorRef) = new Meta(self, Term(1), Vector.empty, None)
+    def initial(implicit self: ActorRef) = new Meta(self, Term(0), Vector.empty, Map.empty)
   }
 }
