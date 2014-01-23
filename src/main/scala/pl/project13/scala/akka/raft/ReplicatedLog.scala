@@ -27,29 +27,27 @@ case class ReplicatedLog[T <: AnyRef](
   def commit(n: Int): ReplicatedLog[T] =
     copy(commitedIndex = n) // todo persist too, right?
 
-  def append(term: Term, command: T, client: Option[ActorRef]): ReplicatedLog[T] =
-    copy(
-      entries = entries :+ Entry(command, term, client)
-    )
+  def append(newEntries: Seq[Entry[T]]): ReplicatedLog[T] =
+    copy(entries = entries ++ newEntries)
+
+  def append(term: Term, client: Option[ActorRef], command: T): ReplicatedLog[T] =
+    copy(entries = entries :+ Entry(command, term, client))
 
   // log views
-  def entriesFrom(idx: Int, howMany: Int = 5) = entries.slice(idx, idx + howMany)
+
+  def apply(idx: Int): Entry[T] = entries(idx)
+
+  /** from index, but excluding at that index */
+  def entriesFrom(idx: Int, howMany: Int = 5) = entries.slice(idx + 1, idx + 1 + howMany)
 
   def committedEntries = entries.slice(0, commitedIndex)
 
   def notCommittedEntries = entries.slice(commitedIndex + 1, entries.length)
 }
 
-class EmptyReplicatedLog[T <: AnyRef] extends ReplicatedLog[T](Vector.empty, 0, 0) {
+class EmptyReplicatedLog[T <: AnyRef] extends ReplicatedLog[T](Vector.empty, -1, 0) { // todo lastapplied?
   override def lastTerm = Term(0)
   override def lastIndex = -1
-
-  override def commit(n: Int): ReplicatedLog[T] =
-    super.commit(n)
-
-  override def append(term: Term, command: T, client: Option[ActorRef]): ReplicatedLog[T] =
-    super.append(term, command, client)
-
 }
 
 object ReplicatedLog {

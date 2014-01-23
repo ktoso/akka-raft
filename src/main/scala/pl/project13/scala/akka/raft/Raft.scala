@@ -9,7 +9,6 @@ import scala.collection.immutable
 import protocol._
 import java.util.concurrent.TimeUnit
 
-
 trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
   this: Actor =>
 
@@ -35,8 +34,9 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
 
   val heartbeatInterval: FiniteDuration = config.getDuration("akka.raft.heartbeat-interval", TimeUnit.MILLISECONDS).millis
 
+  // todo make val and mutable?
   var nextIndex = LogIndexMap.initialize(Vector.empty, replicatedLog.lastIndex)
-  var matchIndex = LogIndexMap.initialize(Vector.empty, 0)
+  var matchIndex = LogIndexMap.initialize(Vector.empty, -1)
 
   override def preStart() {
     val timeout = resetElectionTimeout()
@@ -64,13 +64,19 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
 
     // append entries
     case Event(AppendEntries(term, leader, prevLogIndex, prevLogTerm, entries: immutable.Seq[Entry[Command]]), m: Meta)
+      if replicatedLog.isConsistentWith(prevLogTerm, prevLogIndex) && term >= m.currentTerm && entries.isEmpty =>
+      stayAcceptingHeartbeat()
+
+
+    case Event(AppendEntries(term, leader, prevLogIndex, prevLogTerm, entries: immutable.Seq[Entry[Command]]), m: Meta)
       if replicatedLog.isConsistentWith(prevLogTerm, prevLogIndex) && term >= m.currentTerm =>
+      log.info(s"term $term, prevLogIndex $prevLogIndex prevLogTerm $prevLogTerm; ${m.currentTerm} / ${replicatedLog.lastIndex} / ${replicatedLog.lastTerm}")
+
       entries foreach { entry =>
-        replicatedLog.append(entry.term, entry.command, entry.client)
+        replicatedLog = replicatedLog.append(entries)
       }
       
-      leader ! AppendSuccessful(self, m.currentTerm)
-
+      leader ! AppendSuccessful(self, term)
       stayAcceptingHeartbeat() using m.copy(currentTerm = term)
 
     case Event(AppendEntries(term, leader, prevLogIndex, prevLogTerm, entries: immutable.Seq[Entry[Command]]), m: Meta)
@@ -111,6 +117,8 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
     case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: ElectionMeta) if m.canVote =>
       sender ! Vote(m.currentTerm)
       stay()
+
+    // todo if existing record, but is different value, rollback one value from log
 
     case Event(Vote(term), m: ElectionMeta) =>
       val includingThisVote = m.incVote
@@ -154,7 +162,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
   when(Leader) {
     case Event(ElectedAsLeader(), m: LeaderMeta) =>
       log.info(s"Became leader for ${m.currentTerm}")
-      prepareEachFollowersNextIndex(m.others)
+      initializeLeaderState(m.members)
       startHeartbeat(m.currentTerm, m.others)
       stay()
 
@@ -162,32 +170,54 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
       sendHeartbeat(m.currentTerm, m.others)
       stay()
 
-    case Event(Write(client, cmd: Command), m: LeaderMeta) =>
-      log.info(s"Appending command: $cmd from $client to replicated log...")
-      replicatedLog = replicatedLog.append(m.currentTerm, cmd, Some(client))
+    // client request
+    case Event(ClientMessage(client, cmd: Command), m: LeaderMeta) =>
+      log.info(s"Appending command: [${bold(cmd)}] from $client to replicated log...")
+
+      replicatedLog = replicatedLog.append(m.currentTerm, Some(client), cmd)
+      self ! AppendSuccessful(self, m.currentTerm)
+
       replicateLog(m)
+
       stay()
 
-    case Event(AppendSuccessful(follower, term), _) =>
-      log.info(s"Follower $follower took write in term: $term")
+    case Event(AppendSuccessful(follower, term), m: LeaderMeta) =>
+      nextIndex.incrementFor(follower)
+      matchIndex.putIf(follower, _ < _, nextIndex.valueFor(follower))
 
-      // todo reply to client when quorum rached
+      val comittedIndex = matchIndex.indexOnMajority
+
+      log.info(s"Follower $follower took write in term: $term, comitted index: $comittedIndex")
+
+      if (comittedIndex > replicatedLog.commitedIndex) {
+        replicatedLog = replicatedLog.commit(comittedIndex)
+        val entry = replicatedLog(comittedIndex)
+        log.info(s"Applying command: $entry")
+        apply(entry.command)
+      }
+
+      stay()
+
+    case Event(AppendRejected(follower, term), m: LeaderMeta) =>
+      log.info(s"Follower $follower rejected write in term: $term, back out one index and retry")
+      nextIndex.decrementFor(follower)
+      val logIndexToSend = nextIndex.valueFor(follower)
+
+      // todo continue sending to follower, to make it catch up
+      // todo should include term a command came from, right?
+      follower ! AppendEntries(
+        m.currentTerm,
+        self,
+        replicatedLog.lastIndex,
+        replicatedLog.lastTerm,
+        replicatedLog.entriesFrom(logIndexToSend)
+      )
 
       stay()
 
     case Event(AppendRejected(follower, term), m: LeaderMeta) if term > m.currentTerm =>
       stopHeartbeat()
       stepDown(m) // since there seems to be another leader!
-
-    case Event(AppendRejected(follower, term), m: LeaderMeta) =>
-      nextIndex = nextIndex.decrementFor(follower)
-      val logIndexToSend = nextIndex.valueFor(follower)
-
-      // todo continue sending to follower, to make it catch up
-      // todo should include term a command came from, right?
-      follower ! AppendEntries(m.currentTerm, self, replicatedLog.lastIndex, replicatedLog.lastTerm, replicatedLog.entriesFrom(logIndexToSend))
-
-      stay()
   }
 
   whenUnhandled {
@@ -219,9 +249,10 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
 
   def logIndex: Int = replicatedLog.lastIndex
 
-  def prepareEachFollowersNextIndex(followers: immutable.Seq[ActorRef]) {
-    log.info(s"Preparing nextIndex table for followers, init all to: replicatedLog.lastIndex = ${replicatedLog.lastIndex}")
-    nextIndex = LogIndexMap.initialize(followers, replicatedLog.lastIndex)
+  def initializeLeaderState(members: immutable.Seq[ActorRef]) {
+    log.debug(s"Preparing nextIndex and matchIndex table for followers, init all to: replicatedLog.lastIndex = ${replicatedLog.lastIndex}")
+    nextIndex = LogIndexMap.initialize(members, replicatedLog.lastIndex)
+    matchIndex = LogIndexMap.initialize(members, -1)
   }
 
   def stopHeartbeat() {
@@ -295,4 +326,6 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
 
   @inline def voter = sender() // not explicitly a Raft role, but makes it nice to read
   // end of sender aliases
+
+  private def bold(msg: Any): String = Console.BOLD + msg.toString + Console.RESET
 }

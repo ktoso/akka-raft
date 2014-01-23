@@ -7,8 +7,11 @@ import scala.collection.immutable
 trait RaftProtocol {
   sealed trait RaftMessage extends Message[Raft]
 
-  /** Used by RaftClients to write to the replicated log */
-  case class Write[T <: AnyRef](client: ActorRef, cmd: T) extends RaftMessage
+  /**
+   * Wrap messages you want to send to the underlying replicated state machine
+   * TODO remove client param
+   */
+  case class ClientMessage[T <: AnyRef](@deprecated client: ActorRef, cmd: T) extends RaftMessage
 
   case class RequestVote(
     term: Term,

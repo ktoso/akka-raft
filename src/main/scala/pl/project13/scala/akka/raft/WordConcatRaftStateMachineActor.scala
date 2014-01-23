@@ -1,14 +1,13 @@
 package pl.project13.scala.akka.raft
 
 import akka.actor.{ActorRef, Actor}
-import scala.collection.immutable.Seq
 import scala.collection.mutable.ListBuffer
 
-class RaftActor extends Actor with Raft {
+class WordConcatRaftStateMachineActor extends Actor with Raft {
   type Command = Cmnd
 
   var words = ListBuffer[String]()
-  
+
   /** Called when a command is determined by Raft to be safe to apply */
   def apply(command: Command) = command match {
     case AppendWord(word, replyTo) =>

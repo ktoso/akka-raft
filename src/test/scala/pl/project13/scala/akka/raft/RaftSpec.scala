@@ -12,7 +12,7 @@ abstract class RaftSpec extends TestKit(ActorSystem("raft-test")) with FlatSpecL
   import protocol._
 
   // notice the EventStreamAllMessages, thanks to this we're able to wait for messages like "leader elected" etc.
-  private var _members: Vector[TestFSMRef[RaftState, Metadata, RaftActor with EventStreamAllMessages]] = _
+  private var _members: Vector[TestFSMRef[RaftState, Metadata, WordConcatRaftStateMachineActor with EventStreamAllMessages]] = _
 
   def memberCount: Int
 
@@ -27,7 +27,7 @@ abstract class RaftSpec extends TestKit(ActorSystem("raft-test")) with FlatSpecL
 
     _members = (1 to memberCount).toVector map { i =>
       TestFSMRef(
-        new RaftActor with EventStreamAllMessages,
+        new WordConcatRaftStateMachineActor with EventStreamAllMessages,
         name = s"member-$i"
       )
     }

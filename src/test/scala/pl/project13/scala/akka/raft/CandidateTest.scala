@@ -10,7 +10,7 @@ class CandidateTest extends RaftSpec with BeforeAndAfterEach
 
   behavior of "Candidate"
 
-  val candidate = TestFSMRef(new RaftTestActor with EventStreamAllMessages)
+  val candidate = TestFSMRef(new WordConcatRaftStateMachineActor with EventStreamAllMessages)
 
   var data: ElectionMeta = _
   

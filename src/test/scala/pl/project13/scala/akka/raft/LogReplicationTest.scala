@@ -9,6 +9,8 @@ class LogReplicationTest extends RaftSpec {
 
   val memberCount = 5
 
+  val timeout = 200.millis
+  
   it should "apply the state machine in expected order" in {
     // given
     subscribeElectedLeader()
@@ -16,17 +18,18 @@ class LogReplicationTest extends RaftSpec {
     infoMemberStates()
 
     // when
-    leader.get ! Write(probe.ref, "I")
-    leader.get ! Write(probe.ref, "like")
-    leader.get ! Write(probe.ref, "bananas")
+    // todo duplication in api msg types!!!
+    leader.get ! ClientMessage(probe.ref, AppendWord("I", probe.ref))
+    leader.get ! ClientMessage(probe.ref, AppendWord("like", probe.ref))
+    leader.get ! ClientMessage(probe.ref, AppendWord("bananas", probe.ref))
 
-    probe.expectMsg(max = 100.millis, "I")
-    probe.expectMsg(max = 100.millis, "like")
-    probe.expectMsg(max = 100.millis, "bananas")
+    probe.expectMsg(timeout, "I")
+    probe.expectMsg(timeout, "like")
+    probe.expectMsg(timeout, "bananas")
 
     // then
-    leader.get ! GetWords(probe.ref)
-    probe.expectMsg(max = 100.millis, List("I", "like", "bananas"))
+    leader.get ! ClientMessage(probe.ref, GetWords(probe.ref))
+    probe.expectMsg(timeout, List("I", "like", "bananas"))
   }
 
 }

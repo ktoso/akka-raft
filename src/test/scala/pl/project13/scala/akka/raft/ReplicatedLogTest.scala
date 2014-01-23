@@ -18,8 +18,8 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
 
     // when
     val frozenLog = replicatedLog
-    replicatedLog = replicatedLog.append(t1, command1, None)
-    replicatedLog = replicatedLog.append(t2, command2, None)
+    replicatedLog = replicatedLog.append(t1, None, command1)
+    replicatedLog = replicatedLog.append(t2, None, command2)
 
     // then
     frozenLog.entries should have length 0 // check for immutability
@@ -30,9 +30,9 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
     // given
     var replicatedLog = ReplicatedLog.empty[String]
     replicatedLog = ReplicatedLog.empty[String]
-    replicatedLog = replicatedLog.append(Term(1), "a", None)
-    replicatedLog = replicatedLog.append(Term(2), "b", None)
-    replicatedLog = replicatedLog.append(Term(3), "a", None)
+    replicatedLog = replicatedLog.append(Term(1), None, "a")
+    replicatedLog = replicatedLog.append(Term(2), None, "b")
+    replicatedLog = replicatedLog.append(Term(3), None, "a")
 
     // when
     val comittedLog = replicatedLog.commit(2)
@@ -52,8 +52,8 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
   "isConsistentWith" should "be consistent for valid append within a term" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String]
-    replicatedLog = replicatedLog.append(Term(1), "a", None) // t1, 0
-    replicatedLog = replicatedLog.append(Term(1), "b", None) // t1, 1
+    replicatedLog = replicatedLog.append(Term(1), None, "a") // t1, 0
+    replicatedLog = replicatedLog.append(Term(1), None, "b") // t1, 1
 
     // when / then
     replicatedLog.isConsistentWith(Term(1), 0) should equal (false)
@@ -64,7 +64,7 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
     // given
     val emptyLog = ReplicatedLog.empty[String]
     var replicatedLog = ReplicatedLog.empty[String]
-    replicatedLog = replicatedLog.append(Term(1), "a", None) // t1, 0
+    replicatedLog = replicatedLog.append(Term(1), None, "a") // t1, 0
 
     // when
     val isConsistent = emptyLog.isConsistentWith(replicatedLog.prevTerm, replicatedLog.prevIndex)
@@ -75,10 +75,10 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
   it should "be consistent for valid append across a term" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String]
-    replicatedLog = replicatedLog.append(Term(1), "a", None) // t1, 0
-    replicatedLog = replicatedLog.append(Term(1), "b", None) // t1, 1
-    replicatedLog = replicatedLog.append(Term(2), "b", None) // t2, 2
-    replicatedLog = replicatedLog.append(Term(3), "b", None) // t3, 3
+    replicatedLog = replicatedLog.append(Term(1), None, "a") // t1, 0
+    replicatedLog = replicatedLog.append(Term(1), None, "b") // t1, 1
+    replicatedLog = replicatedLog.append(Term(2), None, "b") // t2, 2
+    replicatedLog = replicatedLog.append(Term(3), None, "b") // t3, 3
 
     // when / then
     replicatedLog.isConsistentWith(Term(1), 0) should equal (false)
@@ -93,7 +93,7 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
   "prevTerm / prevIndex" should "be Term(0) / -1 after first write" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String]
-    replicatedLog = replicatedLog.append(Term(1), "a", None) // t1, 0
+    replicatedLog = replicatedLog.append(Term(1), None, "a") // t1, 0
 
     // when
     val prevTerm = replicatedLog.prevTerm
@@ -102,6 +102,23 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
     // then
     prevTerm should equal (Term(0))
     prevIndex should equal (-1)
+  }
+
+  "entriesFrom" should "not include already sent entries" in {
+    // given
+    var replicatedLog = ReplicatedLog.empty[String]
+    replicatedLog = replicatedLog.append(Term(1), None, "a") // t1, 0
+    replicatedLog = replicatedLog.append(Term(1), None, "b") // t1, 1
+    replicatedLog = replicatedLog.append(Term(2), None, "c") // t2, 2
+    replicatedLog = replicatedLog.append(Term(3), None, "d") // t3, 3
+
+    // when
+    val lastTwo = replicatedLog.entriesFrom(0)
+
+    // then
+    lastTwo should have length 2
+    lastTwo(0) should equal (Entry("c", Term(2)))
+    lastTwo(1) should equal (Entry("d", Term(3)))
   }
 
 }
