@@ -66,8 +66,8 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
     // end of election
 
     // append entries
-    case Event(AppendEntries(term, leader, prevLogIndex, prevLogTerm, entries: immutable.Seq[Entry[Command]]), m: Meta)
-      if replicatedLog.isConsistentWith(prevLogTerm, prevLogIndex) && term >= m.currentTerm && entries.isEmpty =>
+
+    case Event(AppendEntries(term, leader, _, _, Nil), _) =>
       stayAcceptingHeartbeat()
 
 
@@ -113,16 +113,26 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
       val voteForMyself = m.incVote
       stay() using voteForMyself
 
+    case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: ElectionMeta)
+      if m.canVoteIn(term) =>
+
+      sender ! Vote(m.currentTerm)
+      stay() using m.withVoteFor(candidate)
+
+    case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: ElectionMeta) =>
+      sender ! Reject(term)
+      stay()
+
     // todo if existing record, but is different value, rollback one value from log
 
     case Event(Vote(term), m: ElectionMeta) =>
       val includingThisVote = m.incVote
 
       if (includingThisVote.hasMajority) {
-        log.info(s"Received enough votes to be majority (${includingThisVote.votesReceived} of ${m.members.size})")
+        log.info(s"Received vote from $voter; Won election with ${includingThisVote.votesReceived} of ${m.members.size} votes")
         goto(Leader) using m.forLeader
       } else {
-        log.info(s"Received vote from $voter, now up to ${includingThisVote.votesReceived}")
+        log.info(s"Received vote from $voter; Have ${includingThisVote.votesReceived} of ${m.members.size} votes")
         stay() using includingThisVote
       }
 
@@ -163,6 +173,10 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
 
     case Event(SendHeartbeat, m: LeaderMeta) =>
       sendHeartbeat(m.currentTerm, m.others)
+      stay()
+
+    // already won election, but votes may still be coming in
+    case Event(_: ElectionMessage, _) =>
       stay()
 
     // client request

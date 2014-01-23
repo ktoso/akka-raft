@@ -22,7 +22,7 @@ trait StateMetadata {
     def canVoteIn(term: Term) = term >= currentTerm && votes.get(term).isEmpty
 
     /** A member can only vote once during one Term */
-    def cannotVote = votes.get(currentTerm).isDefined
+    def cannotVoteIn(term: Term) = term < currentTerm || votes.get(term).isDefined
 
   }
 
