@@ -122,4 +122,46 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
     lastTwo(1) should equal (Entry("d", Term(3)))
   }
 
+  "verifyOrDrop" should "not change if entries match" in {
+    // given
+    var replicatedLog = ReplicatedLog.empty[String]
+    replicatedLog = replicatedLog.append(Term(1), None, "a") // t1, 0
+    replicatedLog = replicatedLog.append(Term(1), None, "b") // t1, 1
+    replicatedLog = replicatedLog.append(Term(2), None, "c") // t2, 2
+    replicatedLog = replicatedLog.append(Term(3), None, "d") // t3, 3
+
+    // when
+    val check0 = replicatedLog.verifyOrDrop(Entry("a", Term(1), None), 0)
+    val check1 = replicatedLog.verifyOrDrop(Entry("b", Term(1), None), 1)
+    val check2 = replicatedLog.verifyOrDrop(Entry("c", Term(2), None), 2)
+    val check3 = replicatedLog.verifyOrDrop(Entry("d", Term(3), None), 3)
+
+    // then
+    check0 should equal (replicatedLog)
+    check1 should equal (replicatedLog)
+    check2 should equal (replicatedLog)
+    check3 should equal (replicatedLog)
+  }
+
+  it should "drop elements after an index that does not match" in {
+    // given
+    var replicatedLog = ReplicatedLog.empty[String]
+    replicatedLog = replicatedLog.append(Term(1), None, "a") // t1, 0
+    replicatedLog = replicatedLog.append(Term(1), None, "b") // t1, 1
+    replicatedLog = replicatedLog.append(Term(2), None, "c") // t2, 2
+    replicatedLog = replicatedLog.append(Term(3), None, "d") // t3, 3
+
+    // when
+    val check0 = replicatedLog.verifyOrDrop(Entry("a", Term(1), None), 0)
+    val check1 = replicatedLog.verifyOrDrop(Entry("b", Term(1), None), 1)
+    val check2 = replicatedLog.verifyOrDrop(Entry("C!!!", Term(2), None), 2) // differen command
+
+    // then
+    check0 should equal (replicatedLog)
+    check1 should equal (replicatedLog)
+
+    check2 should not equal replicatedLog
+    check2.entries should have length 2
+  }
+
 }
