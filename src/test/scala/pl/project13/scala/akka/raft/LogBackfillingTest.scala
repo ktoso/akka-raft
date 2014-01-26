@@ -26,9 +26,9 @@ class LogBackfillingTest extends RaftSpec {
     Thread.sleep(100)
     suspendMember(unstableFollower)
 
-    leader ! ClientMessage(probe.ref, AppendWord("I", probe.ref))
-    leader ! ClientMessage(probe.ref, AppendWord("like", probe.ref))
-    leader ! ClientMessage(probe.ref, AppendWord("bananas", probe.ref))
+    leader ! ClientMessage(probe.ref, AppendWord("I"))
+    leader ! ClientMessage(probe.ref, AppendWord("like"))
+    leader ! ClientMessage(probe.ref, AppendWord("bananas"))
 
     restartMember(unstableFollower)
 

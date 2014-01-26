@@ -1,7 +1,6 @@
 package pl.project13.scala.akka.raft
 
 import org.scalatest._
-import pl.project13.scala.akka.raft.Entry
 
 class ReplicatedLogTest extends FlatSpec with Matchers {
   

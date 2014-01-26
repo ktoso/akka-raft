@@ -11,25 +11,25 @@ class WordConcatRaftStateMachineActor extends Actor with Raft {
   var raftListeners: List[ActorRef] = Nil
 
   /** Called when a command is determined by Raft to be safe to apply */
-  def apply(command: Command) = command match {
-    case AddListener(actor) =>
-      log.info(s"Will also notify ${actor} about on committed message...")
-      raftListeners = actor :: raftListeners
+  def apply(command: Command): Any = command match {
+    case AddListener(listener) =>
+      log.info(s"Will also notify $listener about on committed message...")
+      raftListeners = listener :: raftListeners
 
-    case AppendWord(word, replyTo) =>
+    case AppendWord(word) =>
       words append word
       log.info(s"Applied command [$command], full words is: $words")
 
       raftListeners foreach { _ ! word }
-      replyTo ! word
+      word
 
-    case GetWords(replyTo) =>
+    case GetWords() =>
       raftListeners foreach { _ ! words.toList }
-      replyTo ! words.toList
+      words.toList
   }
 }
 
 sealed trait Cmnd
-case class AppendWord(word: String, replyTo: ActorRef) extends Cmnd
-case class GetWords(replyTo: ActorRef) extends Cmnd
+case class AppendWord(word: String)       extends Cmnd
+case class GetWords()                     extends Cmnd
 case class AddListener(replyTo: ActorRef) extends Cmnd

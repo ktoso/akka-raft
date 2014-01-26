@@ -37,7 +37,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
   // todo so mutable or not......
   // todo or move to Meta
   var nextIndex = LogIndexMap.initialize(Vector.empty, replicatedLog.lastIndex)
-  var matchIndex = LogIndexMap.initialize(Vector.empty, 0)
+  var matchIndex = LogIndexMap.initialize(Vector.empty, -1)
 
   override def preStart() {
     val timeout = resetElectionTimeout()
@@ -159,43 +159,15 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
       log.info(s"Appending command: [${bold(cmd)}] from $client to replicated log...")
 
       replicatedLog += Entry(cmd, m.currentTerm, replicatedLog.lastIndex + 1, Some(client))
-      self ! AppendSuccessful(m.currentTerm, replicatedLog.lastIndex)
-
       replicateLog(m)
 
       stay()
 
-    case Event(AppendSuccessful(term, idx), m: LeaderMeta) =>
-      nextIndex.put(follower, idx)
-      matchIndex.putIf(follower, _ < _, nextIndex.valueFor(follower))
+    case Event(msg: AppendRejected, m: LeaderMeta) =>
+      registerAppendRejected(follower, msg, m)
 
-      val comittedIndex = matchIndex.indexOnMajority
-
-      log.info(s"Follower $follower took write in term: $term, index: ${nextIndex.valueFor(follower)}")
-
-      if (idx < replicatedLog.lastIndex) {
-        log.info(s"$idx < ${replicatedLog.lastIndex}")
-        sendEntries(follower, m)
-      }
-
-      if (comittedIndex > replicatedLog.commitedIndex) {
-        replicatedLog = replicatedLog.commit(comittedIndex)
-        val entry = replicatedLog(comittedIndex)
-        log.info(s"Applying command: $entry")
-        apply(entry.command)
-      }
-
-      stay()
-
-    case Event(AppendRejected(term), m: LeaderMeta) if term <= m.currentTerm =>
-      log.info(s"Follower $follower rejected write in term: $term, back out one index and retry")
-
-      val indexToStartReplicationFrom = replicatedLog.firstIndexInTerm(term)
-      nextIndex.put(follower, indexToStartReplicationFrom)
-
-      sendEntries(follower, m)
-
-      stay()
+    case Event(msg: AppendSuccessful, m: LeaderMeta) =>
+      registerAppendSuccessful(follower, msg, m)
 
     case Event(AppendRejected(term), m: LeaderMeta) if term > m.currentTerm =>
       stopHeartbeat()
@@ -250,7 +222,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
   def initializeLeaderState(members: immutable.Seq[ActorRef]) {
     log.debug(s"Preparing nextIndex and matchIndex table for followers, init all to: replicatedLog.lastIndex = ${replicatedLog.lastIndex}")
     nextIndex = LogIndexMap.initialize(members, replicatedLog.lastIndex)
-    matchIndex = LogIndexMap.initialize(members, 0)
+    matchIndex = LogIndexMap.initialize(members, -1)
   }
 
   def stopHeartbeat() {
@@ -269,9 +241,8 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
 
   def replicateLog(m: LeaderMeta) {
     m.others foreach { member =>
-      log.info(s"nextIndex.valueFor(${member.path.elements.last}) = " + nextIndex.valueFor(member))
       val commands = replicatedLog.commandsBatchFrom(nextIndex.valueFor(member))
-      log.info(s"Sending: " + commands)
+//      log.info(s"Sending: " + commands)
       val msg = AppendEntries(m.currentTerm, replicatedLog.prevIndex, replicatedLog.prevTerm, commands)
 
       member ! msg
@@ -294,7 +265,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
 
   def appendEntries(msg: AppendEntries[Command], m: Meta) = msg.entries match {
     case entries if entries.isEmpty =>
-      log.info("Accepting heartbeat...")
+      log.debug(s"Accepting heartbeat from Leader($leader)...")
       stayAcceptingHeartbeat()
 
     case entries =>
@@ -350,6 +321,59 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
   def stayAcceptingHeartbeat() = {
     resetElectionTimeout()
     stay()
+  }
+
+  def registerAppendRejected(member: ActorRef, msg: AppendRejected, m: LeaderMeta) = {
+    val AppendRejected(followerTerm) = msg
+
+    log.info(s"Follower $follower rejected write in term: $followerTerm, back out the first index in this term and retry")
+
+    val indexToStartReplicationFrom = replicatedLog.firstIndexInTerm(followerTerm)
+    nextIndex.put(follower, indexToStartReplicationFrom)
+
+    sendEntries(follower, m)
+
+    stay()
+  }
+  def registerAppendSuccessful(member: ActorRef, msg: AppendSuccessful, m: LeaderMeta) = {
+    val AppendSuccessful(followerTerm, followerIndex) = msg
+
+    // update our tables for this member
+    nextIndex.put(follower, followerIndex)
+    matchIndex.putIf(follower, _ < _, nextIndex.valueFor(follower))
+    log.info(s"Follower $follower took write in term: $followerTerm, index: ${nextIndex.valueFor(follower)}")
+
+    nextIndex.incrementFor(follower)
+
+    sendOldEntriesIfLaggingClient(followerIndex, m)
+
+    replicatedLog = maybeCommitEntry(matchIndex, replicatedLog)
+
+    stay()
+  }
+
+
+  def sendOldEntriesIfLaggingClient(followerIndex: Int, m: LeaderMeta) {
+    if (followerIndex < replicatedLog.lastIndex) {
+      log.info(s"$followerIndex < ${replicatedLog.lastIndex}")
+      sendEntries(follower, m)
+    }
+  }
+
+  def maybeCommitEntry(matchIndex: LogIndexMap, replicatedLog: ReplicatedLog[Command]): ReplicatedLog[Command] = {
+    val indexOnMajority = matchIndex.indexOnMajority
+    log.debug("Majority of members have index: " + matchIndex.indexOnMajority + " persisted.")
+
+    if (indexOnMajority > replicatedLog.commitedIndex) {
+      val entry = replicatedLog(indexOnMajority)
+
+      log.info(s"Majority's index above last comitted index, thus applying next command: $entry")
+      entry.client map { _ ! apply(entry.command) }
+
+      replicatedLog.commit(indexOnMajority)
+    } else {
+      replicatedLog
+    }
   }
 
   /** `true` if this follower is at `Term(2)`, yet the incoming term is `t > Term(3)` */

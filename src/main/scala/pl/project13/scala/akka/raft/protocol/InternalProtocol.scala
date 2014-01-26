@@ -20,12 +20,12 @@ trait InternalProtocol {
   case object ElectionTimeout   extends ElectionMessage
 
   /** When the Leader has sent an append, for an unexpected number, the Follower replies with this */
-  sealed trait AppendResponse {
+  sealed trait AppendResponse extends FollowerResponse {
     /** currentTerm for leader to update in the `nextTerm` lookup table */
     def term: Term
   }
-  case class AppendRejected(term: Term)                   extends FollowerResponse
-  case class AppendSuccessful(term: Term, lastIndex: Int) extends FollowerResponse
+  case class AppendRejected(term: Term)                   extends AppendResponse
+  case class AppendSuccessful(term: Term, lastIndex: Int) extends AppendResponse
 
   case object SendHeartbeat extends LeaderMessage
 

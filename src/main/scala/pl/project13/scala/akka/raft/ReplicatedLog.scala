@@ -5,8 +5,7 @@ import scala.annotation.switch
 
 case class ReplicatedLog[Command <: AnyRef](
   entries: Vector[Entry[Command]],
-  commitedIndex: Int,
-  lastApplied: Int
+  commitedIndex: Int
 ) {
 
   def commands = entries.map(_.command)
@@ -36,9 +35,6 @@ case class ReplicatedLog[Command <: AnyRef](
 
   def +(newEntry: Entry[Command]): ReplicatedLog[Command] =
     append(newEntry)
-
-//  def append(newEntries: Seq[Entry[Command]]): ReplicatedLog[Command] =
-//    copy(entries = entries ++ newEntries)
 
   def putWithDroppingInconsistent(replicatedEntry: Entry[Command]): ReplicatedLog[Command] = {
     val replicatedIndex = replicatedEntry.index
@@ -78,7 +74,7 @@ case class ReplicatedLog[Command <: AnyRef](
   def notCommittedEntries = entries.slice(commitedIndex + 1, entries.length)
 }
 
-class EmptyReplicatedLog[T <: AnyRef] extends ReplicatedLog[T](Vector.empty, 0, 0) { // todo lastapplied?
+class EmptyReplicatedLog[T <: AnyRef] extends ReplicatedLog[T](Vector.empty, -1) {
   override def lastTerm = Term(0)
   override def lastIndex = 0
 }

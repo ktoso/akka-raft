@@ -44,12 +44,14 @@ case class LogIndexMap(private var backing: Map[ActorRef, Int]) {
 
   // todo make nicer...
   def indexOnMajority = {
-    backing
+    val index = backing
       .groupBy(_._2)
       .map { case (k, m) => k -> m.size }
       .toList
       .sortBy(- _._2).head // sort by size
       ._1
+
+    index
   }
 
   
