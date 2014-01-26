@@ -56,7 +56,7 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
     replicatedLog.lastIndex should equal (comittedLog.lastIndex)
     replicatedLog.lastTerm should equal (comittedLog.lastTerm)
 
-    replicatedLog.commitedIndex should equal (-1) // nothing ever comitted
+    replicatedLog.commitedIndex should equal (0) // nothing ever comitted
     comittedLog.commitedIndex should equal (comittedIndex)
 
     comittedLog.committedEntries should have length (2)
@@ -105,7 +105,7 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
     replicatedLog.containsMatchingEntry(Term(3), 3) should equal (true)
   }
 
-  "prevTerm / prevIndex" should "be Term(0) / -1 after first write" in {
+  "prevTerm / prevIndex" should "be Term(0) / 0 after first write" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String]
     replicatedLog = replicatedLog.append(Entry("a", Term(1), 0))
@@ -116,7 +116,7 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
 
     // then
     prevTerm should equal (Term(0))
-    prevIndex should equal (-1)
+    prevIndex should equal (0)
   }
 
   "entriesFrom" should "not include already sent entries" in {

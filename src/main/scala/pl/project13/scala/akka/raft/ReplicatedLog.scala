@@ -14,7 +14,7 @@ case class ReplicatedLog[Command <: AnyRef](
    * Performs the "consistency check", which checks if the data that we just got from the
    */
   def containsMatchingEntry(otherPrevTerm: Term, otherPrevIndex: Int): Boolean =
-    (otherPrevIndex == -1) || (lastTerm == otherPrevTerm && lastIndex == otherPrevIndex)
+    (otherPrevIndex == 0 && entries.isEmpty) || (lastTerm == otherPrevTerm && lastIndex == otherPrevIndex)
 
   // log state
   def lastTerm  = entries.lastOption map { _.term } getOrElse Term(0)
@@ -63,7 +63,7 @@ case class ReplicatedLog[Command <: AnyRef](
       entriesBatchFrom(fromExcluding, howMany).map(_.command)
 
   def firstIndexInTerm(term: Term): Int =
-    entries.zipWithIndex find { case (e, i) => e.term == term } map { _._2 } getOrElse -1
+    entries.zipWithIndex find { case (e, i) => e.term == term } map { _._2 } getOrElse 0
 
   def termAt(index: Int) =
     if (index < 0) Term(0)
@@ -74,9 +74,9 @@ case class ReplicatedLog[Command <: AnyRef](
   def notCommittedEntries = entries.slice(commitedIndex + 1, entries.length)
 }
 
-class EmptyReplicatedLog[T <: AnyRef] extends ReplicatedLog[T](Vector.empty, -1, 0) { // todo lastapplied?
+class EmptyReplicatedLog[T <: AnyRef] extends ReplicatedLog[T](Vector.empty, 0, 0) { // todo lastapplied?
   override def lastTerm = Term(0)
-  override def lastIndex = -1
+  override def lastIndex = 0
 }
 
 object ReplicatedLog {

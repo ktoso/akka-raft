@@ -37,7 +37,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
   // todo so mutable or not......
   // todo or move to Meta
   var nextIndex = LogIndexMap.initialize(Vector.empty, replicatedLog.lastIndex)
-  var matchIndex = LogIndexMap.initialize(Vector.empty, -1)
+  var matchIndex = LogIndexMap.initialize(Vector.empty, 0)
 
   override def preStart() {
     val timeout = resetElectionTimeout()
@@ -250,7 +250,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
   def initializeLeaderState(members: immutable.Seq[ActorRef]) {
     log.debug(s"Preparing nextIndex and matchIndex table for followers, init all to: replicatedLog.lastIndex = ${replicatedLog.lastIndex}")
     nextIndex = LogIndexMap.initialize(members, replicatedLog.lastIndex)
-    matchIndex = LogIndexMap.initialize(members, -1)
+    matchIndex = LogIndexMap.initialize(members, 0)
   }
 
   def stopHeartbeat() {
@@ -292,6 +292,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
   }
 
   def appendEntries(msg: AppendEntries[Command], m: Meta) = {
+    log.info(s"Current term: ${m.currentTerm}, log index: ${replicatedLog.lastTerm} @ ${replicatedLog.lastIndex}")
     def logState() =
       log.info(s"Log state: ${replicatedLog.commands}")
 
