@@ -271,6 +271,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
     m.others foreach { member =>
       log.info(s"nextIndex.valueFor(${member.path.elements.last}) = " + nextIndex.valueFor(member))
       val commands = replicatedLog.commandsBatchFrom(nextIndex.valueFor(member))
+      log.info(s"Sending: " + commands)
       val msg = AppendEntries(m.currentTerm, replicatedLog.prevIndex, replicatedLog.prevTerm, commands)
 
       member ! msg

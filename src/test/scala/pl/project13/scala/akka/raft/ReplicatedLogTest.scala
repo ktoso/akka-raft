@@ -89,6 +89,7 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
     // then
     isConsistent should equal (true)
   }
+
   it should "be consistent for valid append across a term" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String]
@@ -130,7 +131,7 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
     replicatedLog = replicatedLog.append(Entry("d", Term(3), 3))
 
     // when
-    val lastTwo = replicatedLog.entriesBatchFrom(1)
+    val lastTwo = replicatedLog.entriesBatchFrom(2)
 
     // then
     lastTwo should have length 2

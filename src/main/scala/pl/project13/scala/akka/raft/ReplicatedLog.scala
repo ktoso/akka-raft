@@ -59,12 +59,12 @@ case class ReplicatedLog[Command <: AnyRef](
 
   def apply(idx: Int): Entry[Command] = entries(idx)
 
-  /** @param fromExcluding index from which to start the slice (excluding the entry at that index) */
-  def entriesBatchFrom(fromExcluding: Int, howMany: Int = 5): Vector[Entry[Command]] =
-    entries.slice(fromExcluding + 1, fromExcluding + 1 + howMany)
+  /** @param fromIncluding index from which to start the slice (excluding the entry at that index) */
+  def entriesBatchFrom(fromIncluding: Int, howMany: Int = 5): Vector[Entry[Command]] =
+    entries.slice(fromIncluding, fromIncluding + howMany)
   
-  def commandsBatchFrom(fromExcluding: Int, howMany: Int = 5): Vector[Command] =
-      entriesBatchFrom(fromExcluding, howMany).map(_.command)
+  def commandsBatchFrom(fromIncluding: Int, howMany: Int = 5): Vector[Command] =
+      entriesBatchFrom(fromIncluding, howMany).map(_.command)
 
   def firstIndexInTerm(term: Term): Int =
     entries.zipWithIndex find { case (e, i) => e.term == term } map { _._2 } getOrElse 0
