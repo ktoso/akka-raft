@@ -291,36 +291,41 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
     timeout
   }
 
-  def appendEntries(msg: AppendEntries[Command], m: Meta) = {
-    log.info(s"Current term: ${m.currentTerm}, log index: ${replicatedLog.lastTerm} @ ${replicatedLog.lastIndex}")
-    def logState() =
-      log.info(s"Log state: ${replicatedLog.commands}")
+  def appendEntries(msg: AppendEntries[Command], m: Meta) = msg.entries match {
+    case entries if entries.isEmpty =>
+      log.info("Accepting heartbeat...")
+      stayAcceptingHeartbeat()
 
-    if(msg.term < m.currentTerm) {
-      // leader is behind
-      log.info(s"Append rejected - leader is behind (leader:${msg.term}, self: ${m.currentTerm})")
-      logState()
+    case entries =>
+      log.info(s"Current term: ${m.currentTerm}, log index: ${replicatedLog.lastTerm} @ ${replicatedLog.lastIndex}")
+      def logState() =
+        log.info(s"Log state: ${replicatedLog.commands}")
 
-      leader ! AppendRejected(m.currentTerm)
-    } else if (replicatedLog.containsMatchingEntry(msg.prevLogTerm, msg.prevLogIndex)) {
-      // matches, do append
-      log.info("entries = " + msg.entries)
+      if(msg.term < m.currentTerm) {
+        // leader is behind
+        log.info(s"Append rejected - leader is behind (leader:${msg.term}, self: ${m.currentTerm})")
+        logState()
 
-      msg.entries foreach { entry =>
-        replicatedLog += entry
+        leader ! AppendRejected(m.currentTerm)
+      } else if (replicatedLog.containsMatchingEntry(msg.prevLogTerm, msg.prevLogIndex)) {
+        // matches, do append
+        log.info("entries = " + msg.entries)
+
+        entries foreach { entry =>
+          replicatedLog += entry
+        }
+        logState()
+
+        leader ! AppendSuccessful(msg.term, replicatedLog.lastIndex)
+      } else {
+        log.info("Append rejected.")
+        logState()
+
+        leader ! AppendRejected(m.currentTerm)
       }
-      logState()
 
-      leader ! AppendSuccessful(msg.term, replicatedLog.lastIndex)
-    } else {
-      log.info("Append rejected.")
-      logState()
-
-      leader ! AppendRejected(m.currentTerm)
+      stayAcceptingHeartbeat() using m.copy(currentTerm = msg.term)
     }
-
-    stayAcceptingHeartbeat() using m.copy(currentTerm = msg.term)
-  }
 
   def randomElectionTimeout(from: FiniteDuration = 150.millis, to: FiniteDuration = 300.millis): FiniteDuration = {
     val fromMs = from.toMillis

@@ -48,7 +48,6 @@ abstract class RaftSpec extends TestKit(ActorSystem("raft-test")) with FlatSpecL
   def maybeLeader() = members.find(_.stateName == Leader)
 
   def leader() = maybeLeader getOrElse {
-    infoMemberStates()
     throw new RuntimeException("Unable to find leader!")
   }
 
@@ -64,7 +63,7 @@ abstract class RaftSpec extends TestKit(ActorSystem("raft-test")) with FlatSpecL
   }
 
   def infoMemberStates() {
-    info(s"Members: ${members.map(simpleName).mkString(", ")}; Leader is: ${simpleName(leader)}")
+    info(s"Members: ${members.map(simpleName).mkString(", ")}; Leader is: ${maybeLeader map simpleName}")
   }
 
   // cluster management
