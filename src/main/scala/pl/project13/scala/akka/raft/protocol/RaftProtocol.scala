@@ -21,11 +21,17 @@ trait RaftProtocol {
   ) extends RaftMessage
 
   case class AppendEntries[T <: AnyRef](
-    currentTerm: Term,
-    leader: ActorRef,
+    term: Term,
     prevLogIndex: Int,
     prevLogTerm: Term,
-    entries: immutable.Seq[T]
-  ) extends RaftMessage
+    commands: immutable.Seq[T]
+  ) extends RaftMessage {
+
+    def entries = commands.zipWithIndex map { case (c, i) =>
+      Entry(c, term, prevLogIndex + 1 + i)
+    }
+
+    override def toString = s"""AppendEntries(term:$term,prevLog:($prevLogTerm,$prevLogIndex),commands:$commands)"""
+  }
 
 }

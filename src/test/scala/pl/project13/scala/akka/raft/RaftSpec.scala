@@ -45,9 +45,18 @@ abstract class RaftSpec extends TestKit(ActorSystem("raft-test")) with FlatSpecL
     super.afterEach()
   }
 
-  def leader() = members.find(_.stateName == Leader)
+  def maybeLeader() = members.find(_.stateName == Leader)
+
+  def leader() = maybeLeader getOrElse {
+    infoMemberStates()
+    throw new RuntimeException("Unable to find leader!")
+  }
 
   def members() = _members.filterNot(_.isTerminated)
+
+  def followers() = _members.filter(m => m.stateName == Follower && !m.isTerminated)
+
+  def candidates() = _members.filter(m => m.stateName == Candidate && !m.isTerminated)
 
   def simpleName(ref: ActorRef) = {
     import collection.JavaConverters._
@@ -55,7 +64,28 @@ abstract class RaftSpec extends TestKit(ActorSystem("raft-test")) with FlatSpecL
   }
 
   def infoMemberStates() {
-    info(s"Members: ${members.map(simpleName).mkString(", ")}; Leader is: ${leader map simpleName}")
+    info(s"Members: ${members.map(simpleName).mkString(", ")}; Leader is: ${simpleName(leader)}")
+  }
+
+  // cluster management
+
+  def killLeader() = {
+    val leaderToStop = leader
+    leaderToStop.stop()
+    info(s"Killed leader: ${simpleName(leaderToStop)}")
+    leaderToStop
+  }
+
+  def suspendMember(member: TestFSMRef[_, _, _]) = {
+    member.suspend()
+    info(s"Killed member: ${simpleName(member)}")
+    member
+  }
+
+  def restartMember(member: TestFSMRef[_, _, _]) = {
+    member.restart(new Throwable)
+    info(s"Restarted member: ${simpleName(member)}")
+    member
   }
 
   // await stuff -------------------------------------------------------------------------------------------------------

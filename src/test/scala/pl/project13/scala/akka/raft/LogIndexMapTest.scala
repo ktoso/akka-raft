@@ -1,6 +1,5 @@
 package pl.project13.scala.akka.raft
 
-import org.scalatest.{Matchers, FlatSpec}
 import akka.testkit.TestProbe
 import scala.collection.immutable
 

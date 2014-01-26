@@ -12,10 +12,12 @@ import scala.collection.immutable
  */
 case class LogIndexMap(private var backing: Map[ActorRef, Int]) {
 
-  def decrementFor(member: ActorRef): Int = {
-    val value = backing(member) - 1
-    backing = backing.updated(member, value)
-    value
+  def decrementFor(member: ActorRef): Int = backing(member) match {
+    case -1 => -1
+    case n =>
+      val value = n - 1
+      backing = backing.updated(member, value)
+      value
   }
 
   def incrementFor(member: ActorRef): Int = {

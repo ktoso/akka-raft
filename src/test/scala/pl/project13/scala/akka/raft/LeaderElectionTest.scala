@@ -36,9 +36,7 @@ class LeaderElectionTest extends RaftSpec {
     infoMemberStates()
 
     // when
-    val leaderToStop = leader.get
-    leaderToStop.stop()
-    info(s"Stopped leader: ${simpleName(leaderToStop)}")
+    killLeader()
 
     // then
     awaitElectedLeader()
