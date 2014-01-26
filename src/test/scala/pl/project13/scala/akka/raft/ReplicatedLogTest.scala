@@ -82,6 +82,8 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
     replicatedLog += Entry("a", Term(1), 0)
 
     // when
+    info(s"empty log: ${emptyLog}")
+    info(s"prevTerm: ${replicatedLog.prevTerm}, prevIndex: ${replicatedLog.prevIndex}")
     val isConsistent = emptyLog.containsMatchingEntry(replicatedLog.prevTerm, replicatedLog.prevIndex)
 
     // then

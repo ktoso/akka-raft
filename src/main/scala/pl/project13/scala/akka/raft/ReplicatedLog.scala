@@ -1,6 +1,7 @@
 package pl.project13.scala.akka.raft
 
 import akka.actor.ActorRef
+import scala.annotation.switch
 
 case class ReplicatedLog[Command <: AnyRef](
   entries: Vector[Entry[Command]],
@@ -20,7 +21,10 @@ case class ReplicatedLog[Command <: AnyRef](
   def lastTerm  = entries.lastOption map { _.term } getOrElse Term(0)
   def lastIndex = entries.length - 1
 
-  def prevIndex = lastIndex - 1
+  def prevIndex = (lastIndex: @switch) match {
+    case 0 => 0 // special handling of initial case, we don't go into negative indexes
+    case n => n -1
+  }
   def prevTerm  = if (entries.size < 2) Term(0) else entries.dropRight(1).last.term
 
   // log actions
