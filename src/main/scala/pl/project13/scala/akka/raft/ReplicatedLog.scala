@@ -3,7 +3,7 @@ package pl.project13.scala.akka.raft
 import akka.actor.ActorRef
 import scala.annotation.switch
 
-case class ReplicatedLog[Command <: AnyRef](
+case class ReplicatedLog[Command](
   entries: Vector[Entry[Command]],
   commitedIndex: Int
 ) {
@@ -86,9 +86,6 @@ case class ReplicatedLog[Command <: AnyRef](
         Vector.empty
     }
   }
-  
-//  def commandsBatchFrom(fromIncluding: Int, howMany: Int = 5): Vector[Command] =
-//    entriesBatchFrom(fromIncluding, howMany).map(_.command)
 
   def between(fromIndex: Int, toIndex: Int): Vector[Entry[Command]] =
     entries.slice(fromIndex + 1, toIndex + 1)
@@ -109,13 +106,13 @@ case class ReplicatedLog[Command <: AnyRef](
   def notCommitedEntries = entries.slice(commitedIndex + 1, entries.length)
 }
 
-class EmptyReplicatedLog[T <: AnyRef] extends ReplicatedLog[T](Vector.empty, -1) {
+class EmptyReplicatedLog[T] extends ReplicatedLog[T](Vector.empty, -1) {
   override def lastTerm = Term(0)
   override def lastIndex = 0
 }
 
 object ReplicatedLog {
-  def empty[T <: AnyRef]: ReplicatedLog[T] = new EmptyReplicatedLog[T]
+  def empty[T]: ReplicatedLog[T] = new EmptyReplicatedLog[T]
 }
 
 case class Entry[T](
@@ -123,4 +120,12 @@ case class Entry[T](
   term: Term,
   index: Int,
   client: Option[ActorRef] = None
-)
+) {
+
+  def prevTerm = term.prev
+
+  def prevIndex = index - 1 match {
+    case -1 => 0
+    case n  => n
+  }
+}

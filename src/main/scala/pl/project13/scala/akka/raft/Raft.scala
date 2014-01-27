@@ -7,11 +7,12 @@ import scala.collection.immutable
 
 import protocol._
 import java.util.concurrent.TimeUnit
+import scala.annotation.tailrec
 
 trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
   this: Actor =>
 
-  type Command <: AnyRef
+  type Command
   type Member = ActorRef
 
   private val config = context.system.settings.config
@@ -179,17 +180,22 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
   }
 
   def sendEntries(follower: ActorRef, m: LeaderMeta) {
-    val prevLogIndex = nextIndex.valueFor(follower)
-
-    val entries = replicatedLog.entriesBatchFrom(prevLogIndex)
+    val entries = replicatedLog.entriesBatchFrom(nextIndex.valueFor(follower))
     log.debug("sendEntries::commands = " + entries)
 
     val msg = AppendEntries(
       m.currentTerm,
-      prevLogIndex,
-      replicatedLog.termAt(prevLogIndex),
-      entries
+      replicatedLog,
+      fromIndex = nextIndex.valueFor(follower)
     )
+
+//    todo remove me
+//    val msg = AppendEntries(
+//      m.currentTerm,
+//      replicatedLog.termAt(prevLogIndex),
+//      prevLogIndex,
+//      entries
+//    )
 
     log.info(s"Sending: $msg")
 
@@ -242,19 +248,18 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
     setTimer(HeartbeatTimerName, SendHeartbeat, heartbeatInterval, repeat = true)
   }
 
-//  def sendHeartbeat(currentTerm: Term, members: Vector[ActorRef]) {
+  /** heartbeat is implemented as basically sending AppendEntry messages */
   def sendHeartbeat(m: LeaderMeta) {
     replicateLog(m)
-//    members foreach { _ ! AppendEntries(currentTerm, replicatedLog.lastIndex, replicatedLog.lastTerm, Nil) }
   }
 
   def replicateLog(m: LeaderMeta) {
     m.others foreach { member =>
-      val entries = replicatedLog.entriesBatchFrom(nextIndex.valueFor(member))
-//      log.info(s"Sending: " + commands)
-      val msg = AppendEntries(m.currentTerm, replicatedLog.prevIndex, replicatedLog.prevTerm, entries)
-
-      member ! msg
+      member ! AppendEntries(
+        m.currentTerm,
+        replicatedLog,
+        fromIndex = nextIndex.valueFor(member)
+      )
     }
   }
 
@@ -272,47 +277,47 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
     timeout
   }
 
-  def appendEntries(msg: AppendEntries[Command], m: Meta) = msg.entries match {
-//    case entries if entries.isEmpty =>
-    case Nil =>
-      stayAcceptingHeartbeat()
-
-    case commands =>
-      def logState() =
-        log.info(s"Log state: ${replicatedLog.commands}")
-
-      log.info(s"Got request to append: $msg; Follower's log state: ${replicatedLog.lastTerm} @ ${replicatedLog.lastIndex}")
-      logState()
-
-//      if(msg.term < m.currentTerm) {
-//        // leader is behind
-//        log.info(s"Append rejected - leader is behind (leader:${msg.term}, self: ${m.currentTerm})")
-//        logState()
-//
-//        leader ! AppendRejected(m.currentTerm)
-//        stayAcceptingHeartbeat()
-//
-//      } else
-      if (replicatedLog.containsMatchingEntry(msg.prevLogTerm, msg.prevLogIndex)) {
-        log.info("Appending entries: " + msg.entries)
-
-        // todo make work with more
-        msg.entries foreach { entry =>
-          replicatedLog += entry
-        }
-        logState()
-
-        leader ! AppendSuccessful(msg.term, replicatedLog.lastIndex)
-        stayAcceptingHeartbeat() using m.copy(currentTerm = msg.term)
-
-      } else {
-        log.info("Append rejected.")
-        logState()
-
-        leader ! AppendRejected(m.currentTerm)
+  def appendEntries(msg: AppendEntries[Command], m: Meta): State =
+    msg.entries match {
+      case Nil =>
         stayAcceptingHeartbeat()
+
+      case commands =>
+        def logState() =
+          log.info(s"Log state: ${replicatedLog.commands}")
+
+        log.info(s"Got append request: $msg; Follower's log state: ${replicatedLog.lastTerm} @ ${replicatedLog.lastIndex}")
+        logState()
+
+    //      if(msg.term < m.currentTerm) {
+    //        // leader is behind
+    //        log.info(s"Append rejected - leader is behind (leader:${msg.term}, self: ${m.currentTerm})")
+    //        logState()
+    //
+    //        leader ! AppendRejected(m.currentTerm)
+    //        stayAcceptingHeartbeat()
+    //
+    //      } else
+        if (replicatedLog.containsMatchingEntry(msg.prevLogTerm, msg.prevLogIndex)) {
+          log.info("Appending entries: " + msg.entries)
+
+          // todo make work with more
+          msg.entries foreach { entry =>
+            replicatedLog += entry
+          }
+          logState()
+
+          leader ! AppendSuccessful(msg.term, replicatedLog.lastIndex)
+          stayAcceptingHeartbeat() using m.copy(currentTerm = msg.term)
+
+        } else {
+          log.info("Append rejected.")
+          logState()
+
+          leader ! AppendRejected(m.currentTerm)
+          stayAcceptingHeartbeat()
+        }
       }
-    }
 
   def randomElectionTimeout(from: FiniteDuration = 150.millis, to: FiniteDuration = 300.millis): FiniteDuration = {
     val fromMs = from.toMillis
