@@ -55,12 +55,12 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
     replicatedLog.lastIndex should equal (comittedLog.lastIndex)
     replicatedLog.lastTerm should equal (comittedLog.lastTerm)
 
-    replicatedLog.commitedIndex should equal (0) // nothing ever comitted
+    replicatedLog.commitedIndex should equal (-1) // nothing ever comitted
     comittedLog.commitedIndex should equal (comittedIndex)
 
-    comittedLog.committedEntries should have length (2)
-    comittedLog.committedEntries.head should equal (Entry("a", Term(1), 0, None))
-    comittedLog.committedEntries.tail.head should equal (Entry("b", Term(2), 1, None))
+    comittedLog.commitedEntries should have length (2)
+    comittedLog.commitedEntries.head should equal (Entry("a", Term(1), 0, None))
+    comittedLog.commitedEntries.tail.head should equal (Entry("b", Term(2), 1, None))
   }
 
   "isConsistentWith" should "be consistent for valid append within a term" in {
@@ -121,21 +121,40 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
     prevIndex should equal (0)
   }
 
-  "entriesFrom" should "not include already sent entries" in {
+  "entriesFrom" should "not include already sent entry, from given term" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String]
     replicatedLog = replicatedLog.append(Entry("a", Term(1), 0))
     replicatedLog = replicatedLog.append(Entry("b", Term(1), 1))
     replicatedLog = replicatedLog.append(Entry("c", Term(2), 2))
-    replicatedLog = replicatedLog.append(Entry("d", Term(3), 3))
+    replicatedLog = replicatedLog.append(Entry("d", Term(3), 3)) // other term
 
     // when
-    val lastTwo = replicatedLog.entriesBatchFrom(2)
+    val inTerm1 = replicatedLog.entriesBatchFrom(1)
 
     // then
-    lastTwo should have length 2
-    lastTwo(0) should equal (Entry("c", Term(2), 2))
-    lastTwo(1) should equal (Entry("d", Term(3), 3))
+    inTerm1 should have length 1
+    inTerm1(0) should equal (Entry("b", Term(1), 1))
+  }
+
+  it should "not include already sent entries, from given term" in {
+    // given
+    var replicatedLog = ReplicatedLog.empty[String]
+    replicatedLog = replicatedLog.append(Entry("a", Term(1), 0))
+    replicatedLog = replicatedLog.append(Entry("b", Term(1), 1))
+    replicatedLog = replicatedLog.append(Entry("c0", Term(2), 2))
+    replicatedLog = replicatedLog.append(Entry("c1", Term(2), 3))
+    replicatedLog = replicatedLog.append(Entry("c2", Term(2), 4))
+    replicatedLog = replicatedLog.append(Entry("d", Term(3), 5)) // other term
+
+    // when
+    val entriesFrom2ndTerm = replicatedLog.entriesBatchFrom(2)
+
+    // then
+    entriesFrom2ndTerm should have length 3
+    entriesFrom2ndTerm(0) should equal (Entry("c0", Term(2), 2))
+    entriesFrom2ndTerm(1) should equal (Entry("c1", Term(2), 3))
+    entriesFrom2ndTerm(2) should equal (Entry("c2", Term(2), 4))
   }
 
   "verifyOrDrop" should "not change if entries match" in {

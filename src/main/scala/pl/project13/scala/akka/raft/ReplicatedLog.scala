@@ -104,9 +104,9 @@ case class ReplicatedLog[Command <: AnyRef](
     if (index < 0) Term(0)
     else entries(index).term
 
-  def committedEntries = entries.slice(0, commitedIndex)
+  def commitedEntries = entries.slice(0, commitedIndex)
 
-  def notCommittedEntries = entries.slice(commitedIndex + 1, entries.length)
+  def notCommitedEntries = entries.slice(commitedIndex + 1, entries.length)
 }
 
 class EmptyReplicatedLog[T <: AnyRef] extends ReplicatedLog[T](Vector.empty, -1) {
