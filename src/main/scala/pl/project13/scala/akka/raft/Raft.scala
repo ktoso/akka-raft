@@ -58,7 +58,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
       stay() using m.withVote(term, candidate)
 
     case Event(RequestVote(term, candidateId, lastLogTerm, lastLogIndex), m: Meta) =>
-      log.info(s"Rejecting vote for $candidate, and $term, currentTerm: ${m.currentTerm}, already voted for: ${m.votes(term)}")
+      log.info(s"Rejecting vote for $candidate, and $term, currentTerm: ${m.currentTerm}, already voted for: ${m.votes.get(term)}")
       sender ! Reject(m.currentTerm)
       stay()
       

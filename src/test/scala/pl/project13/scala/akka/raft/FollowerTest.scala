@@ -38,7 +38,7 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
     expectMsg(Vote(Term(2)))
   }
 
-  it should "Reject if Cancidate has lower Term than it" in {
+  it should "Reject if Candidate has lower Term than it" in {
     // given
     follower.setState(Follower, data)
 
