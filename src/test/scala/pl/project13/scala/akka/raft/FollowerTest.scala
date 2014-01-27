@@ -82,7 +82,7 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
       )
     follower.setState(Follower, data)
 
-    val msg = AppendEntries(Term(1), 0, Term(0), immutable.Seq("a"))
+    val msg = AppendEntries(Term(1), 0, Term(0), immutable.Seq(Entry("a", Term(1), 1)))
 
     // when
     info("Sending Append(a)")

@@ -58,7 +58,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
       stay() using m.withVote(term, candidate)
 
     case Event(RequestVote(term, candidateId, lastLogTerm, lastLogIndex), m: Meta) =>
-      log.info(s"Rejecting vote for $candidate, and $term, currentTerm: ${m.currentTerm}, already voted for: ${m.votes}")
+      log.info(s"Rejecting vote for $candidate, and $term, currentTerm: ${m.currentTerm}, already voted for: ${m.votes(term)}")
       sender ! Reject(m.currentTerm)
       stay()
       
@@ -82,8 +82,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
       val request = RequestVote(m.currentTerm, self, replicatedLog.lastTerm, replicatedLog.lastIndex)
       m.membersExceptSelf foreach { _ ! request }
 
-      val voteForMyself = m.incVote
-      stay() using voteForMyself
+      stay() using m.incVote.withVoteFor(self)
 
     case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: ElectionMeta)
       if m.canVoteIn(term) =>
@@ -143,11 +142,11 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
     case Event(ElectedAsLeader(), m: LeaderMeta) =>
       log.info(bold(s"Became leader for ${m.currentTerm}"))
       initializeLeaderState(m.members)
-      startHeartbeat(m.currentTerm, m.others)
+      startHeartbeat(m)
       stay()
 
     case Event(SendHeartbeat, m: LeaderMeta) =>
-      sendHeartbeat(m.currentTerm, m.others)
+      sendHeartbeat(m)
       stay()
 
     // already won election, but votes may still be coming in
@@ -182,19 +181,17 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
   def sendEntries(follower: ActorRef, m: LeaderMeta) {
     val prevLogIndex = nextIndex.valueFor(follower)
 
-    log.debug("sendEntries::prevLogIndex = " + prevLogIndex)
-
-    val commands = replicatedLog.commandsBatchFrom(prevLogIndex, 1)
-    log.debug("sendEntries::commands = " + commands)
+    val entries = replicatedLog.entriesBatchFrom(prevLogIndex)
+    log.debug("sendEntries::commands = " + entries)
 
     val msg = AppendEntries(
       m.currentTerm,
       prevLogIndex,
       replicatedLog.termAt(prevLogIndex),
-      commands
+      entries
     )
 
-    log.info(s"Sending: ${msg}")
+    log.info(s"Sending: $msg")
 
     follower ! msg
   }
@@ -238,21 +235,24 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
     cancelTimer(HeartbeatTimerName)
   }
 
-  def startHeartbeat(currentTerm: Term, members: Vector[ActorRef]) {
-    sendHeartbeat(currentTerm, members)
+  def startHeartbeat(m: LeaderMeta) {
+//  def startHeartbeat(currentTerm: Term, members: Vector[ActorRef]) {
+    sendHeartbeat(m)
     log.info(s"Starting hearbeat, with interval: $heartbeatInterval")
     setTimer(HeartbeatTimerName, SendHeartbeat, heartbeatInterval, repeat = true)
   }
 
-  def sendHeartbeat(currentTerm: Term, members: Vector[ActorRef]) {
-    members foreach { _ ! AppendEntries(currentTerm, replicatedLog.lastIndex, replicatedLog.lastTerm, Nil) }
+//  def sendHeartbeat(currentTerm: Term, members: Vector[ActorRef]) {
+  def sendHeartbeat(m: LeaderMeta) {
+    replicateLog(m)
+//    members foreach { _ ! AppendEntries(currentTerm, replicatedLog.lastIndex, replicatedLog.lastTerm, Nil) }
   }
 
   def replicateLog(m: LeaderMeta) {
     m.others foreach { member =>
-      val commands = replicatedLog.commandsBatchFrom(nextIndex.valueFor(member))
+      val entries = replicatedLog.entriesBatchFrom(nextIndex.valueFor(member))
 //      log.info(s"Sending: " + commands)
-      val msg = AppendEntries(m.currentTerm, replicatedLog.prevIndex, replicatedLog.prevTerm, commands)
+      val msg = AppendEntries(m.currentTerm, replicatedLog.prevIndex, replicatedLog.prevTerm, entries)
 
       member ! msg
     }
@@ -272,29 +272,33 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
     timeout
   }
 
-  def appendEntries(msg: AppendEntries[Command], m: Meta) = msg.commands match {
+  def appendEntries(msg: AppendEntries[Command], m: Meta) = msg.entries match {
 //    case entries if entries.isEmpty =>
     case Nil =>
       stayAcceptingHeartbeat()
 
     case commands =>
-      log.info(s"Current term: ${m.currentTerm}, log index: ${replicatedLog.lastTerm} @ ${replicatedLog.lastIndex}")
       def logState() =
         log.info(s"Log state: ${replicatedLog.commands}")
 
-      if(msg.term < m.currentTerm) {
-        // leader is behind
-        log.info(s"Append rejected - leader is behind (leader:${msg.term}, self: ${m.currentTerm})")
-        logState()
+      log.info(s"Got request to append: $msg; Follower's log state: ${replicatedLog.lastTerm} @ ${replicatedLog.lastIndex}")
+      logState()
 
-        leader ! AppendRejected(m.currentTerm)
-        stayAcceptingHeartbeat()
+//      if(msg.term < m.currentTerm) {
+//        // leader is behind
+//        log.info(s"Append rejected - leader is behind (leader:${msg.term}, self: ${m.currentTerm})")
+//        logState()
+//
+//        leader ! AppendRejected(m.currentTerm)
+//        stayAcceptingHeartbeat()
+//
+//      } else
+      if (replicatedLog.containsMatchingEntry(msg.prevLogTerm, msg.prevLogIndex)) {
+        log.info("Appending entries: " + msg.entries)
 
-      } else if (replicatedLog.containsMatchingEntry(msg.prevLogTerm, msg.prevLogIndex)) {
-        log.info("commands = " + msg.commands)
-
-        commands foreach { cmd =>
-          replicatedLog += Entry(cmd, msg.term, replicatedLog.nextIndex)
+        // todo make work with more
+        msg.entries foreach { entry =>
+          replicatedLog += entry
         }
         logState()
 
@@ -343,7 +347,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
     val indexToStartReplicationFrom = replicatedLog.firstIndexInTerm(followerTerm)
     nextIndex.put(follower, indexToStartReplicationFrom)
 
-    sendEntries(follower, m)
+//    sendEntries(follower, m)
 
     stay()
   }
@@ -357,7 +361,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
 
     nextIndex.incrementFor(follower)
 
-    sendOldEntriesIfLaggingClient(followerIndex, m)
+//    sendOldEntriesIfLaggingClient(followerIndex, m)
 
     replicatedLog = maybeCommitEntry(matchIndex, replicatedLog)
 
@@ -374,13 +378,17 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
 
   def maybeCommitEntry(matchIndex: LogIndexMap, replicatedLog: ReplicatedLog[Command]): ReplicatedLog[Command] = {
     val indexOnMajority = matchIndex.indexOnMajority
-    log.debug("Majority of members have index: " + matchIndex.indexOnMajority + " persisted.")
+    log.debug("Majority of members have index: " + indexOnMajority + " persisted. (Comitted index: " + replicatedLog.commitedIndex + ")")
 
     if (indexOnMajority > replicatedLog.commitedIndex) {
-      val entry = replicatedLog(indexOnMajority)
+      val entries = replicatedLog.between(replicatedLog.commitedIndex, indexOnMajority)
 
-      log.info(s"Majority's index above last comitted index, thus applying next command: $entry")
-      entry.client map { _ ! apply(entry.command) }
+      entries foreach { entry =>
+        log.info(s"Comitting entry at index: ${entry.index}; Applying command: ${entry.command}, will send result to client: ${entry.client}")
+
+        val result = apply(entry.command)
+        entry.client map { _ ! result }
+      }
 
       replicatedLog.commit(indexOnMajority)
     } else {

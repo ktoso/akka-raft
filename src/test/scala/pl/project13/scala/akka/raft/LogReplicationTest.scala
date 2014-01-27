@@ -10,7 +10,7 @@ class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false) {
 
   val memberCount = 5
 
-  val timeout = 200.millis
+  val timeout = 500.millis
   
   it should "apply the state machine in expected order" in {
     // given
@@ -43,7 +43,7 @@ class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false) {
     infoMemberStates()
 
     // when
-    val failingMembers = followers.take(2)
+    val failingMembers = followers.take(3)
     
     failingMembers foreach { suspendMember(_) }
 
@@ -51,7 +51,7 @@ class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false) {
     leader ! ClientMessage(client.ref, AppendWord("apples"))
 
     // during this time it should not be able to respond...
-//    Thread.sleep(10000)
+    Thread.sleep(500)
 
     failingMembers foreach { restartMember(_) }
     leader ! MembersChanged(members)

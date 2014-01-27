@@ -36,11 +36,20 @@ case class ReplicatedLog[Command <: AnyRef](
   def commit(n: Int): ReplicatedLog[Command] =
     copy(commitedIndex = n)
 
-  def append(newEntry: Entry[Command]): ReplicatedLog[Command] = {
-    val allEntries = entries :+ newEntry.copy(index = nextIndex) // todo make it come in with the right index rigth away
-    require(allEntries.map(_.index).size == allEntries.map(_.index).toSet.size, "Must not allow duplicates in index!     " + entries + "    " + newEntry)
+  private def maybeEntry(i: Int): Option[Entry[Command]] =
+    if (entries.isDefinedAt(i)) Some(entries(i)) else None
 
-    copy(entries = allEntries)
+  def append(entryToAppend: Entry[Command]): ReplicatedLog[Command] = {
+    if (maybeEntry(entryToAppend.index) == Option(entryToAppend)) {
+      // Leader has sent us batches of data, before our Ack got to it, we can safely say "OK, got that one!"
+      this
+    } else {
+      // it's a new entry, so we're appending to the log
+      val allEntries = entries :+ entryToAppend // todo make it come in with the right index rigth away
+      require(allEntries.map(_.index).size == allEntries.map(_.index).toSet.size, "Must not allow duplicates in index!     " + entries + "    " + entryToAppend)
+
+      copy(entries = allEntries)
+    }
   }
 
   def +(newEntry: Entry[Command]): ReplicatedLog[Command] =
@@ -66,11 +75,24 @@ case class ReplicatedLog[Command <: AnyRef](
   def apply(idx: Int): Entry[Command] = entries(idx)
 
   /** @param fromIncluding index from which to start the slice (excluding the entry at that index) */
-  def entriesBatchFrom(fromIncluding: Int, howMany: Int = 5): Vector[Entry[Command]] =
-    entries.slice(fromIncluding, fromIncluding + howMany)
+  def entriesBatchFrom(fromIncluding: Int, howMany: Int = 5): Vector[Entry[Command]] = {
+    val toSend = entries.slice(fromIncluding, fromIncluding + howMany)
+    toSend.headOption match {
+      case Some(head) =>
+        val batchTerm = head.term
+        toSend.takeWhile(_.term == batchTerm) // we only batch commands grouped by their term
+
+      case None =>
+        Vector.empty
+    }
+  }
   
-  def commandsBatchFrom(fromIncluding: Int, howMany: Int = 5): Vector[Command] =
-      entriesBatchFrom(fromIncluding, howMany).map(_.command)
+//  def commandsBatchFrom(fromIncluding: Int, howMany: Int = 5): Vector[Command] =
+//    entriesBatchFrom(fromIncluding, howMany).map(_.command)
+
+  def between(fromIndex: Int, toIndex: Int): Vector[Entry[Command]] =
+    entries.slice(fromIndex + 1, toIndex + 1)
+
 
   def firstIndexInTerm(term: Term): Int = term.termNr match {
     case 0 => 0

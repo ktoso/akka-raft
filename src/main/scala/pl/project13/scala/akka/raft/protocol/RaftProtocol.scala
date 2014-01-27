@@ -24,10 +24,10 @@ trait RaftProtocol {
     term: Term,
     prevLogIndex: Int,
     prevLogTerm: Term,
-    commands: immutable.Seq[T]
+    entries: immutable.Seq[Entry[T]]
   ) extends RaftMessage {
 
-    override def toString = s"""AppendEntries(term:$term,prevLog:($prevLogTerm,$prevLogIndex),commands:$commands)"""
+    override def toString = s"""AppendEntries(term:$term,prevLog:($prevLogTerm,$prevLogIndex),entries:$entries)"""
   }
 
 }
