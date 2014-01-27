@@ -14,7 +14,7 @@ case class ReplicatedLog[Command](
    * Performs the "consistency check", which checks if the data that we just got from the
    */
   def containsMatchingEntry(otherPrevTerm: Term, otherPrevIndex: Int): Boolean =
-    (otherPrevIndex == 0 && entries.isEmpty) || (lastTerm == otherPrevTerm && lastIndex == otherPrevIndex)
+    (otherPrevTerm == Term(0) && otherPrevIndex == 0) || (lastTerm == otherPrevTerm && lastIndex == otherPrevIndex)
 
   // log state
   def lastTerm  = entries.lastOption map { _.term } getOrElse Term(0)
@@ -36,24 +36,28 @@ case class ReplicatedLog[Command](
   def commit(n: Int): ReplicatedLog[Command] =
     copy(commitedIndex = n)
 
-  private def maybeEntry(i: Int): Option[Entry[Command]] =
-    if (entries.isDefinedAt(i)) Some(entries(i)) else None
+//  private def maybeEntry(i: Int): Option[Entry[Command]] =
+//    if (entries.isDefinedAt(i)) Some(entries(i)) else None
 
-  def append(entryToAppend: Entry[Command]): ReplicatedLog[Command] = {
-    if (maybeEntry(entryToAppend.index) == Option(entryToAppend)) {
-      // Leader has sent us batches of data, before our Ack got to it, we can safely say "OK, got that one!"
-      this
-    } else {
-      // it's a new entry, so we're appending to the log
-      val allEntries = entries :+ entryToAppend // todo make it come in with the right index rigth away
-      require(allEntries.map(_.index).size == allEntries.map(_.index).toSet.size, "Must not allow duplicates in index!     " + entries + "    " + entryToAppend)
+  def append(entry: Entry[Command], take: Int = entries.length): ReplicatedLog[Command] =
+    append(List(entry), take)
 
-      copy(entries = allEntries)
-    }
+  def append(entriesToAppend: Seq[Entry[Command]], take: Int): ReplicatedLog[Command] = {
+    copy(entries = entries.take(take) ++ entriesToAppend)
+//    if (maybeEntry(entriesToAppend.index) == Option(entriesToAppend)) {
+//      // Leader has sent us batches of data, before our Ack got to it, we can safely say "OK, got that one!"
+//      this
+//    } else {
+//      // it's a new entry, so we're appending to the log
+//      val allEntries = entries :+ entriesToAppend // todo make it come in with the right index rigth away
+//      require(allEntries.map(_.index).size == allEntries.map(_.index).toSet.size, "Must not allow duplicates in index!     " + entries + "    " + entriesToAppend)
+//
+//      copy(entries = allEntries)
+//    }
   }
 
   def +(newEntry: Entry[Command]): ReplicatedLog[Command] =
-    append(newEntry)
+    append(List(newEntry), entries.size)
 
   def putWithDroppingInconsistent(replicatedEntry: Entry[Command]): ReplicatedLog[Command] = {
     val replicatedIndex = replicatedEntry.index

@@ -39,6 +39,25 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
     commands should equal (List("a", "b"))
   }
 
+  it should "append with slicing some elements away (Leader forces us to drop some entries)" in {
+    // given
+    var replicatedLog = ReplicatedLog.empty[String]
+    replicatedLog += Entry("a", Term(1), 0)
+    replicatedLog += Entry("D", Term(1), 1)
+    replicatedLog += Entry("D", Term(1), 2)
+
+    val entries =
+      Entry("b", Term(1), 1) ::
+      Entry("c", Term(1), 2) ::
+      Nil
+
+    // when
+    replicatedLog = replicatedLog.append(entries, take = 1)
+
+    // then
+    replicatedLog.entries.map(_.command).toList should equal (List("a", "b", "c"))
+  }
+
   "comittedEntries" should "contain entries up until the last committed one" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String]
@@ -89,7 +108,17 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
     isConsistent should equal (true)
   }
 
-  it should "be consistent for valid append across a term" in {
+  it should "be consistent for initial append" in {
+    // given
+    var replicatedLog = ReplicatedLog.empty[String]
+    replicatedLog = replicatedLog.append(Entry("I", Term(1), 0))
+    info("replicated log = " + replicatedLog)
+
+    // when / then
+    replicatedLog.containsMatchingEntry(Term(0), 0) should equal (true)
+  }
+
+  it should "be consistent with AppendEntries with multiple entries" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String]
     replicatedLog = replicatedLog.append(Entry("a", Term(1), 0))
