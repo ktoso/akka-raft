@@ -2,7 +2,7 @@ package pl.project13.scala.akka.raft
 
 import pl.project13.scala.akka.raft.protocol._
 
-class LeaderElectionTest extends RaftSpec {
+class LeaderElectionTest extends RaftSpec(callingThreadDispatcher = false) {
 
   behavior of "Leader Election"
 

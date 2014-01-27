@@ -27,10 +27,6 @@ trait RaftProtocol {
     commands: immutable.Seq[T]
   ) extends RaftMessage {
 
-    def entries = commands.zipWithIndex map { case (c, i) =>
-      Entry(c, term, prevLogIndex + 1 + i)
-    }
-
     override def toString = s"""AppendEntries(term:$term,prevLog:($prevLogTerm,$prevLogIndex),commands:$commands)"""
   }
 

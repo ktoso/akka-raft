@@ -41,7 +41,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
 
   override def preStart() {
     val timeout = resetElectionTimeout()
-    log.debug("Initial election timeout: " + timeout)
+    log.info("Starting new Raft member. Initial election timeout: " + timeout)
   }
 
   startWith(Follower, Meta.initial)
@@ -158,26 +158,35 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
     case Event(ClientMessage(client, cmd: Command), m: LeaderMeta) =>
       log.info(s"Appending command: [${bold(cmd)}] from $client to replicated log...")
 
-      replicatedLog += Entry(cmd, m.currentTerm, replicatedLog.lastIndex + 1, Some(client))
+      val entry = Entry(cmd, m.currentTerm, replicatedLog.nextIndex, Some(client))
+
+      log.info(s"entry = $entry")
+      replicatedLog += entry
+      log.info(s"log status = $replicatedLog")
+
       replicateLog(m)
 
       stay()
+
+    case Event(AppendRejected(term), m: LeaderMeta) if term > m.currentTerm =>
+      stopHeartbeat()
+      stepDown(m) // since there seems to be another leader!
 
     case Event(msg: AppendRejected, m: LeaderMeta) =>
       registerAppendRejected(follower, msg, m)
 
     case Event(msg: AppendSuccessful, m: LeaderMeta) =>
       registerAppendSuccessful(follower, msg, m)
-
-    case Event(AppendRejected(term), m: LeaderMeta) if term > m.currentTerm =>
-      stopHeartbeat()
-      stepDown(m) // since there seems to be another leader!
   }
 
   def sendEntries(follower: ActorRef, m: LeaderMeta) {
     val prevLogIndex = nextIndex.valueFor(follower)
 
-    val commands = replicatedLog.commandsBatchFrom(prevLogIndex + 1, 1)
+    log.debug("sendEntries::prevLogIndex = " + prevLogIndex)
+
+    val commands = replicatedLog.commandsBatchFrom(prevLogIndex, 1)
+    log.debug("sendEntries::commands = " + commands)
+
     val msg = AppendEntries(
       m.currentTerm,
       prevLogIndex,
@@ -263,12 +272,12 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
     timeout
   }
 
-  def appendEntries(msg: AppendEntries[Command], m: Meta) = msg.entries match {
-    case entries if entries.isEmpty =>
-      log.debug(s"Accepting heartbeat from Leader($leader)...")
+  def appendEntries(msg: AppendEntries[Command], m: Meta) = msg.commands match {
+//    case entries if entries.isEmpty =>
+    case Nil =>
       stayAcceptingHeartbeat()
 
-    case entries =>
+    case commands =>
       log.info(s"Current term: ${m.currentTerm}, log index: ${replicatedLog.lastTerm} @ ${replicatedLog.lastIndex}")
       def logState() =
         log.info(s"Log state: ${replicatedLog.commands}")
@@ -279,24 +288,26 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
         logState()
 
         leader ! AppendRejected(m.currentTerm)
-      } else if (replicatedLog.containsMatchingEntry(msg.prevLogTerm, msg.prevLogIndex)) {
-        // matches, do append
-        log.info("entries = " + msg.entries)
+        stayAcceptingHeartbeat()
 
-        entries foreach { entry =>
-          replicatedLog += entry
+      } else if (replicatedLog.containsMatchingEntry(msg.prevLogTerm, msg.prevLogIndex)) {
+        log.info("commands = " + msg.commands)
+
+        commands foreach { cmd =>
+          replicatedLog += Entry(cmd, msg.term, replicatedLog.nextIndex)
         }
         logState()
 
         leader ! AppendSuccessful(msg.term, replicatedLog.lastIndex)
+        stayAcceptingHeartbeat() using m.copy(currentTerm = msg.term)
+
       } else {
         log.info("Append rejected.")
         logState()
 
         leader ! AppendRejected(m.currentTerm)
+        stayAcceptingHeartbeat()
       }
-
-      stayAcceptingHeartbeat() using m.copy(currentTerm = msg.term)
     }
 
   def randomElectionTimeout(from: FiniteDuration = 150.millis, to: FiniteDuration = 300.millis): FiniteDuration = {
@@ -327,6 +338,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
     val AppendRejected(followerTerm) = msg
 
     log.info(s"Follower $follower rejected write in term: $followerTerm, back out the first index in this term and retry")
+    log.info(s"Leader log state: " + replicatedLog.entries)
 
     val indexToStartReplicationFrom = replicatedLog.firstIndexInTerm(followerTerm)
     nextIndex.put(follower, indexToStartReplicationFrom)

@@ -5,14 +5,20 @@ import akka.testkit.{TestProbe, TestFSMRef, TestKit}
 import akka.actor._
 import scala.concurrent.duration._
 import java.util.concurrent.TimeUnit
+import scala.reflect.ClassTag
+import akka.fsm.hack.TestFSMRefHack
 
-abstract class RaftSpec extends TestKit(ActorSystem("raft-test")) with FlatSpecLike with Matchers
+/**
+ * @param callingThreadDispatcher if true, will run using one thread. Use this for FSM tests, otherwise set to false to
+ *                                enable a "really threading" dispatcher (see config for `raft-dispatcher`).
+ */
+abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit(ActorSystem("raft-test")) with FlatSpecLike with Matchers
   with BeforeAndAfterAll with BeforeAndAfterEach {
 
   import protocol._
 
   // notice the EventStreamAllMessages, thanks to this we're able to wait for messages like "leader elected" etc.
-  private var _members: Vector[TestFSMRef[RaftState, Metadata, WordConcatRaftStateMachineActor with EventStreamAllMessages]] = _
+  private var _members: Vector[TestFSMRef[RaftState, Metadata, WordConcatRaftStateMachineActor]] = _
 
   def memberCount: Int
 
@@ -26,12 +32,28 @@ abstract class RaftSpec extends TestKit(ActorSystem("raft-test")) with FlatSpecL
     super.beforeAll()
 
     _members = (1 to memberCount).toVector map { i =>
-      TestFSMRef(
-        new WordConcatRaftStateMachineActor with EventStreamAllMessages,
-        name = s"member-$i"
-      )
+      createActor(i)
     }
     _members foreach { _ ! MembersChanged(_members) }
+  }
+
+
+  /**
+   * Creates an Actor which uses either the CallingThreadDispatcher, or a "real" (raft-dispatcher) with proper parallelism.
+   * > Use the "real" one for feature tests, so actors won't block each other in the CallingThread.
+   * > Use the CallingThreadDispatcher for FSM tests, such as [[pl.project13.scala.akka.raft.CandidateTest]]
+   */
+  def createActor(i: Int): TestFSMRef[RaftState, Metadata, WordConcatRaftStateMachineActor] = {
+    if (callingThreadDispatcher)
+      TestFSMRef(
+        (new WordConcatRaftStateMachineActor with EventStreamAllMessages).asInstanceOf[WordConcatRaftStateMachineActor], // hack, bleh
+        name = s"member-$i"
+      )
+    else
+      TestFSMRefHack[RaftState, Metadata, WordConcatRaftStateMachineActor](
+        Props(new WordConcatRaftStateMachineActor with EventStreamAllMessages).withDispatcher("raft-dispatcher"),
+        name = s"member-$i"
+      )
   }
 
   override def beforeEach() {
@@ -78,12 +100,16 @@ abstract class RaftSpec extends TestKit(ActorSystem("raft-test")) with FlatSpecL
   def suspendMember(member: TestFSMRef[_, _, _]) = {
     member.suspend()
     info(s"Killed member: ${simpleName(member)}")
+    Thread.sleep(10)
+
     member
   }
 
   def restartMember(member: TestFSMRef[_, _, _]) = {
     member.restart(new Throwable)
     info(s"Restarted member: ${simpleName(member)}")
+    Thread.sleep(10)
+
     member
   }
 

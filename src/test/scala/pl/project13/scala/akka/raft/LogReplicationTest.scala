@@ -4,7 +4,7 @@ import pl.project13.scala.akka.raft.protocol._
 import concurrent.duration._
 import akka.testkit.TestProbe
 
-class LogReplicationTest extends RaftSpec {
+class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false) {
 
   behavior of "Log Replication"
 
@@ -37,36 +37,32 @@ class LogReplicationTest extends RaftSpec {
     info(s"Final replicated state machine state: $got")
   }
 
-//  it should "replicate the missing entries to Follower which was down for a while" in {
-//    // given
-//    val client = TestProbe()
-//    infoMemberStates()
-//
-//    val unstableMemberListener = TestProbe()
-//
-//    // when
-//    val unstableFollower = followers.head
-//    unstableMemberListener.ref ! ClientMessage(client.ref, AddListener(unstableMemberListener.ref))
-//    Thread.sleep(100)
-//
-//    suspendMember(unstableFollower)
-//    leader ! ClientMessage(client.ref, AppendWord("and", client.ref))
-//    leader ! ClientMessage(client.ref, AppendWord("apples", client.ref))
-//    Thread.sleep(150)
-//
-//    restartMember(unstableFollower)
-//    Thread.sleep(200)
-//    leader ! MembersChanged(members)
-//
-//    leader ! ClientMessage(client.ref, AppendWord("!", client.ref))
-//    Thread.sleep(200)
-//
-//
-//    // then
-//    unstableMemberListener.expectMsg(ClientMessage(client.ref, AddListener(unstableMemberListener.ref)))
-//    unstableMemberListener.expectMsg(timeout, "and")
-//    unstableMemberListener.expectMsg(timeout, "apples")
-//    unstableMemberListener.expectMsg(timeout, "!")
-//  }
+  it should "replicate the missing entries to Follower which was down for a while" in {
+    // given
+    val client = TestProbe()
+    infoMemberStates()
+
+    // when
+    val failingMembers = followers.take(2)
+    
+    failingMembers foreach { suspendMember(_) }
+
+    leader ! ClientMessage(client.ref, AppendWord("and"))
+    leader ! ClientMessage(client.ref, AppendWord("apples"))
+
+    // during this time it should not be able to respond...
+//    Thread.sleep(10000)
+
+    failingMembers foreach { restartMember(_) }
+    leader ! MembersChanged(members)
+
+    leader ! ClientMessage(client.ref, AppendWord("!"))
+
+    // then
+    // after all nodes came online again, raft should have been able to commit the messages!
+    client.expectMsg(timeout, "and")
+    client.expectMsg(timeout, "apples")
+    client.expectMsg(timeout, "!")
+  }
 
 }

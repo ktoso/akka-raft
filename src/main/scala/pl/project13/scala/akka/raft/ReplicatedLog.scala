@@ -26,12 +26,22 @@ case class ReplicatedLog[Command <: AnyRef](
   }
   def prevTerm  = if (entries.size < 2) Term(0) else entries.dropRight(1).last.term
 
+  /**
+   * Determines index of the next Entry that will be inserted into this log.
+   * Handles edge cases, use this instead of +1'ing manualy.
+   */
+  def nextIndex = entries.size
+
   // log actions
   def commit(n: Int): ReplicatedLog[Command] =
-    copy(commitedIndex = n) // todo persist too, right?
+    copy(commitedIndex = n)
 
-  def append(newEntry: Entry[Command]): ReplicatedLog[Command] =
-    copy(entries = entries :+ newEntry)
+  def append(newEntry: Entry[Command]): ReplicatedLog[Command] = {
+    val allEntries = entries :+ newEntry.copy(index = nextIndex) // todo make it come in with the right index rigth away
+    require(allEntries.map(_.index).size == allEntries.map(_.index).toSet.size, "Must not allow duplicates in index!     " + entries + "    " + newEntry)
+
+    copy(entries = allEntries)
+  }
 
   def +(newEntry: Entry[Command]): ReplicatedLog[Command] =
     append(newEntry)
@@ -62,8 +72,11 @@ case class ReplicatedLog[Command <: AnyRef](
   def commandsBatchFrom(fromIncluding: Int, howMany: Int = 5): Vector[Command] =
       entriesBatchFrom(fromIncluding, howMany).map(_.command)
 
-  def firstIndexInTerm(term: Term): Int =
-    entries.zipWithIndex find { case (e, i) => e.term == term } map { _._2 } getOrElse 0
+  def firstIndexInTerm(term: Term): Int = term.termNr match {
+    case 0 => 0
+    case 1 => 0
+    case _ => entries.zipWithIndex find { case (e, i) => e.term == term } map { _._2 } getOrElse 0
+  }
 
   def termAt(index: Int) =
     if (index < 0) Term(0)
