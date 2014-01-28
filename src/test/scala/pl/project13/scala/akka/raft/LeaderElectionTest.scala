@@ -46,9 +46,12 @@ class LeaderElectionTest extends RaftSpec(callingThreadDispatcher = false) {
     info("New leader elected: ")
     infoMemberStates()
 
-    members.count(_.stateName == Leader) should equal (1)
-    members.count(_.stateName == Candidate) should equal (0)
-    members.count(_.stateName == Follower) should equal (3)
+    val leaderCount = members.count(_.stateName == Leader)
+      val candidateCount = members.count(_.stateName == Candidate)
+      val followerCount = members.count(_.stateName == Follower)
+
+      leaderCount should equal (1)
+      (candidateCount + followerCount) should equal (4)
   }
 
   it should "be able to maintain the same leader for a long time" in {
