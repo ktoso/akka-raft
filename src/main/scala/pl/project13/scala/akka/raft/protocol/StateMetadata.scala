@@ -52,9 +52,10 @@ trait StateMetadata {
     def hasMajority = votesReceived > members.size / 2
 
     // transistion helpers
-    def incVote                          = copy(votesReceived = votesReceived + 1)
-    def incTerm                          = copy(currentTerm = currentTerm.next)
-    def withVoteFor(candidate: ActorRef) = copy(votes = votes + (currentTerm -> candidate))
+    def incVote = copy(votesReceived = votesReceived + 1)
+    def incTerm = copy(currentTerm = currentTerm.next)
+
+    def withVoteFor(term: Term, candidate: ActorRef) = copy(votes = votes + (term -> candidate))
 
     def forLeader: LeaderMeta        = LeaderMeta(self, currentTerm, members)
     def forFollower: Meta            = Meta(self, currentTerm, members, Map.empty)

@@ -27,53 +27,53 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
       )
   }
 
-  it should "reply with Vote if Candidate has later Term than it" in {
-    // given
-    follower.setState(Follower, data)
+//  it should "reply with Vote if Candidate has later Term than it" in {
+//    // given
+//    follower.setState(Follower, data)
+//
+//    // when
+//    follower ! RequestVote(Term(2), self, Term(2), 2)
+//
+//    // then
+//    expectMsg(Vote(Term(2)))
+//  }
+//
+//  it should "Reject if Candidate has lower Term than it" in {
+//    // given
+//    follower.setState(Follower, data)
+//
+//    // when
+//    follower ! RequestVote(Term(1), self, Term(1), 1)
+//
+//    // then
+//    expectMsg(Reject(Term(2)))
+//  }
+//
+//  it should "only vote once during a Term" in {
+//    // given
+//    follower.setState(Follower, data)
+//
+//    // when / then
+//    follower ! RequestVote(Term(2), self, Term(2), 2)
+//    expectMsg(Vote(Term(2)))
+//
+//    follower ! RequestVote(Term(2), self, Term(2), 2)
+//    expectMsg(Reject(Term(2)))
+//  }
+//
+//  it should "become a Candidate if the electionTimeout has elapsed" in {
+//    // given
+//    follower.setState(Follower, data)
+//
+//    // when
+//    info("After awaiting for election timeout...")
+//    Thread.sleep(electionTimeoutMax.toMillis)
+//
+//    // then
+//    follower.stateName should equal (Candidate)
+//  }
 
-    // when
-    follower ! RequestVote(Term(2), self, Term(2), 2)
-
-    // then
-    expectMsg(Vote(Term(2)))
-  }
-
-  it should "Reject if Candidate has lower Term than it" in {
-    // given
-    follower.setState(Follower, data)
-
-    // when
-    follower ! RequestVote(Term(1), self, Term(1), 1)
-
-    // then
-    expectMsg(Reject(Term(2)))
-  }
-
-  it should "only vote once during a Term" in {
-    // given
-    follower.setState(Follower, data)
-
-    // when / then
-    follower ! RequestVote(Term(2), self, Term(2), 2)
-    expectMsg(Vote(Term(2)))
-
-    follower ! RequestVote(Term(2), self, Term(2), 2)
-    expectMsg(Reject(Term(2)))
-  }
-
-  it should "become a Candidate if the electionTimeout has elapsed" in {
-    // given
-    follower.setState(Follower, data)
-
-    // when
-    info("After awaiting for election timeout...")
-    Thread.sleep(electionTimeoutMax.toMillis)
-
-    // then
-    follower.stateName should equal (Candidate)
-  }
-
-  it should "not take the same write twice" in {
+  it should "amortize taking the same write twice, the log should not contain duplicates then" in {
     // given
     data = Meta.initial(follower)
       .copy(
@@ -92,8 +92,8 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
     follower.tell(msg, probe.ref)
 
     // then
-    probe.expectMsg(AppendSuccessful(Term(1), 0))
-    probe.expectMsg(AppendRejected(Term(1), 0))
+    probe.expectMsg(AppendSuccessful(Term(1), 1))
+    probe.expectMsg(AppendSuccessful(Term(1), 1))
   }
 
 }

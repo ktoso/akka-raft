@@ -34,9 +34,9 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
 
   val heartbeatInterval: FiniteDuration = config.getDuration("akka.raft.heartbeat-interval", TimeUnit.MILLISECONDS).millis
 
-  // todo so mutable or not......
   // todo or move to Meta
   var nextIndex = LogIndexMap.initialize(Vector.empty, replicatedLog.lastIndex)
+  // todo or move to Meta
   var matchIndex = LogIndexMap.initialize(Vector.empty, -1)
 
   override def preStart() {
@@ -82,28 +82,26 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
       val request = RequestVote(m.currentTerm, self, replicatedLog.lastTerm, replicatedLog.lastIndex)
       m.membersExceptSelf foreach { _ ! request }
 
-      stay() using m.incVote.withVoteFor(self)
+      val includingThisVote = m.incVote
+      stay() using includingThisVote.withVoteFor(m.currentTerm, self)
 
-    case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: ElectionMeta)
-      if m.canVoteIn(term) =>
-
+    case Event(msg: RequestVote, m: ElectionMeta) if m.canVoteIn(msg.term) =>
+      log.info(s"term >= currentTerm && votes.get(term).isEmpty == ${msg.term} >= ${m.currentTerm} && ${m.votes.get(msg.term).isEmpty}")
       sender ! Vote(m.currentTerm)
-      stay() using m.withVoteFor(candidate)
+      stay() using m.withVoteFor(msg.term, candidate)
 
-    case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: ElectionMeta) =>
-      sender ! Reject(term)
+    case Event(msg: RequestVote, m: ElectionMeta) =>
+      sender ! Reject(msg.term)
       stay()
-
-    // todo if existing record, but is different value, rollback one value from log
 
     case Event(Vote(term), m: ElectionMeta) =>
       val includingThisVote = m.incVote
 
       if (includingThisVote.hasMajority) {
-        log.info(s"Received vote from $voter; Won election with ${includingThisVote.votesReceived} of ${m.members.size} votes")
+        log.info(s"Received vote by $voter; Won election with ${includingThisVote.votesReceived} of ${m.members.size} votes")
         goto(Leader) using m.forLeader
       } else {
-        log.info(s"Received vote from $voter; Have ${includingThisVote.votesReceived} of ${m.members.size} votes")
+        log.info(s"Received vote by $voter; Have ${includingThisVote.votesReceived} of ${m.members.size} votes")
         stay() using includingThisVote
       }
 
