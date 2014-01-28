@@ -329,7 +329,7 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
     log.info(s"Follower $follower rejected write: $followerTerm @ $followerIndex, back out the first index in this term and retry")
     log.info(s"Leader log state: " + replicatedLog.entries)
 
-    nextIndex.putIf(follower, _ < _, followerIndex)
+    nextIndex.putIfSmaller(follower, followerIndex)
 
 //    todo think if we send here or keep in heartbeat
     sendEntries(follower, m)

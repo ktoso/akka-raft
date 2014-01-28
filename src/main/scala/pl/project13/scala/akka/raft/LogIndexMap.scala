@@ -30,8 +30,13 @@ case class LogIndexMap(private var backing: Map[ActorRef, Int]) {
     backing = backing.updated(member, value)
   }
 
+  /** Only put the new `value` if it is __greater than__ the already present value in the map */
   def putIfGreater(member: ActorRef, value: Int): Int =
     putIf(member, _ < _, value)
+
+  /** Only put the new `value` if it is __smaller than__ the already present value in the map */
+  def putIfSmaller(member: ActorRef, value: Int): Int =
+    putIf(member, _ > _, value)
 
   /** @param compare (old, new) => should put? */
   def putIf(member: ActorRef, compare: (Int, Int) => Boolean, value: Int): Int = {

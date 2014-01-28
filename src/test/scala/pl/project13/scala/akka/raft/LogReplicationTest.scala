@@ -42,20 +42,20 @@ class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false) {
     infoMemberStates()
 
     // when
-//    val failingMembers = followers.take(3)
-//
-//    failingMembers foreach { suspendMember(_) }
+    val failingMembers = followers.take(3)
+
+    failingMembers foreach { suspendMember(_) }
 
     leader ! ClientMessage(client.ref, AppendWord("and"))    // 4
     leader ! ClientMessage(client.ref, AppendWord("apples")) // 5
 
     // during this time it should not be able to respond...
-//    Thread.sleep(300)
-//    infoMemberStates()
-//
-//    failingMembers foreach { restartMember(_) }
-//    leader ! MembersChanged(members)
-//
+    Thread.sleep(300)
+    infoMemberStates()
+
+    failingMembers foreach { restartMember(_) }
+    leader ! MembersChanged(members)
+
     leader ! ClientMessage(client.ref, AppendWord("!"))      // 6
 
     // then

@@ -11,7 +11,7 @@ class LeaderElectionTest extends RaftSpec(callingThreadDispatcher = false) {
   // note: these run sequential, so when the 2 test runs, we already have a leader,
   // so we can kill it, and see it the cluster re-elects a new one properly
 
-  it should "electe initial Leader" in {
+  it should "elect initial Leader" in {
     // given
     subscribeElectedLeader()
 
@@ -24,9 +24,12 @@ class LeaderElectionTest extends RaftSpec(callingThreadDispatcher = false) {
     infoMemberStates()
 
     // then
-    members.count(_.stateName == Leader) should equal (1)
-    members.count(_.stateName == Candidate) should equal (0)
-    members.count(_.stateName == Follower) should equal (4)
+    val leaderCount = members.count(_.stateName == Leader)
+    val candidateCount = members.count(_.stateName == Candidate)
+    val followerCount = members.count(_.stateName == Follower)
+
+    leaderCount should equal (1)
+    (candidateCount + followerCount) should equal (4)
   }
 
   it should "elect replacement Leader if current Leader dies" in {
