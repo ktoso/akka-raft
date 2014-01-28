@@ -8,10 +8,9 @@ import scala.collection.immutable
 import protocol._
 import java.util.concurrent.TimeUnit
 
-trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
+trait Raft[Command] extends LoggingFSM[RaftState, Metadata] with RaftStateMachine[Command] {
   this: Actor =>
 
-  type Command
   type Member = ActorRef
 
   private val config = context.system.settings.config
@@ -164,27 +163,12 @@ trait Raft extends LoggingFSM[RaftState, Metadata] with RaftStateMachine {
       registerAppendSuccessful(follower, msg, m)
   }
 
-  def sendEntries(follower: ActorRef, m: LeaderMeta) {
-    val entries = replicatedLog.entriesBatchFrom(nextIndex.valueFor(follower))
-    log.debug("sendEntries::commands = " + entries)
-
-    val msg = AppendEntries(
+  def sendEntries(follower: Member, m: LeaderMeta) {
+    follower ! AppendEntries(
       m.currentTerm,
       replicatedLog,
       fromIndex = nextIndex.valueFor(follower)
     )
-
-//    todo remove me
-//    val msg = AppendEntries(
-//      m.currentTerm,
-//      replicatedLog.termAt(prevLogIndex),
-//      prevLogIndex,
-//      entries
-//    )
-
-    log.info(s"Sending: $msg")
-
-    follower ! msg
   }
 
   whenUnhandled {

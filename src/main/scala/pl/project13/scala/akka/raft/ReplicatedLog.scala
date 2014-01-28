@@ -36,9 +36,6 @@ case class ReplicatedLog[Command](
   def commit(n: Int): ReplicatedLog[Command] =
     copy(commitedIndex = n)
 
-//  private def maybeEntry(i: Int): Option[Entry[Command]] =
-//    if (entries.isDefinedAt(i)) Some(entries(i)) else None
-
   def append(entry: Entry[Command], take: Int = entries.length): ReplicatedLog[Command] =
     append(List(entry), take)
 

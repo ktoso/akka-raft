@@ -1,99 +1,53 @@
 package pl.project13.scala.akka.raft
 
 import pl.project13.scala.akka.raft.protocol._
-import akka.testkit.{ImplicitSender, TestProbe, TestFSMRef}
-import akka.actor.Actor
-import org.scalatest.{OneInstancePerTest, BeforeAndAfterEach}
-import concurrent.duration._
+import akka.testkit.{TestKit, TestProbe, ImplicitSender, TestFSMRef}
+import org.scalatest._
 import scala.collection.immutable
+import akka.actor.ActorSystem
+import pl.project13.scala.akka.raft.Entry
+import pl.project13.scala.akka.raft.AppendWord
 
-class LeaderTest extends RaftSpec with BeforeAndAfterEach
-  with ImplicitSender {
+class LeaderTest extends TestKit(ActorSystem("test-system")) with FlatSpecLike
+  with Matchers
+  with BeforeAndAfterEach with BeforeAndAfterAll {
 
-  behavior of "Follower"
+  behavior of "Leader"
 
-  val follower = TestFSMRef(new WordConcatRaftStateMachineActor)
+  val leader = TestFSMRef(new WordConcatRaftStateMachineActor)
 
   var data: Meta = _
   
-  val memberCount = 0
-
   override def beforeEach() {
     super.beforeEach()
-    data = Meta.initial(follower)
+    data = Meta.initial(leader)
       .copy(
-        currentTerm = Term(2),
-        members = Vector(self)
+        currentTerm = Term(1),
+        members = Vector(leader)
       )
   }
 
-//  it should "reply with Vote if Candidate has later Term than it" in {
-//    // given
-//    follower.setState(Follower, data)
-//
-//    // when
-//    follower ! RequestVote(Term(2), self, Term(2), 2)
-//
-//    // then
-//    expectMsg(Vote(Term(2)))
-//  }
-//
-//  it should "Reject if Candidate has lower Term than it" in {
-//    // given
-//    follower.setState(Follower, data)
-//
-//    // when
-//    follower ! RequestVote(Term(1), self, Term(1), 1)
-//
-//    // then
-//    expectMsg(Reject(Term(2)))
-//  }
-//
-//  it should "only vote once during a Term" in {
-//    // given
-//    follower.setState(Follower, data)
-//
-//    // when / then
-//    follower ! RequestVote(Term(2), self, Term(2), 2)
-//    expectMsg(Vote(Term(2)))
-//
-//    follower ! RequestVote(Term(2), self, Term(2), 2)
-//    expectMsg(Reject(Term(2)))
-//  }
-//
-//  it should "become a Candidate if the electionTimeout has elapsed" in {
-//    // given
-//    follower.setState(Follower, data)
-//
-//    // when
-//    info("After awaiting for election timeout...")
-//    Thread.sleep(electionTimeoutMax.toMillis)
-//
-//    // then
-//    follower.stateName should equal (Candidate)
-//  }
-
-  it should "amortize taking the same write twice, the log should not contain duplicates then" in {
+  it should "commit an entry once it has been written by the majority of the Followers" in {
     // given
-    data = Meta.initial(follower)
-      .copy(
-        currentTerm = Term(0),
-        members = Vector(self)
-      )
-    follower.setState(Follower, data)
+    leader.setState(Leader, data)
+    val actor = leader.underlyingActor
 
-    val msg = AppendEntries(Term(1), Term(0), 0, immutable.Seq(Entry("a", Term(1), 1)))
+    val matchIndex = LogIndexMap.initialize(Vector.empty, -1)
+    matchIndex.put(TestProbe().ref, 2)
+    matchIndex.put(TestProbe().ref, 2)
+    matchIndex.put(TestProbe().ref, 1)
+
+    var replicatedLog = actor.replicatedLog
+    replicatedLog += Entry(AppendWord("a"), Term(1), 1)
+    replicatedLog += Entry(AppendWord("b"), Term(1), 2)
+    replicatedLog += Entry(AppendWord("c"), Term(1), 3)
 
     // when
-    info("Sending Append(a)")
-    follower.tell(msg, probe.ref)
-
-    info("Sending Append(a)")
-    follower.tell(msg, probe.ref)
+    val commitedLog = actor.maybeCommitEntry(matchIndex, replicatedLog)
 
     // then
-    probe.expectMsg(AppendSuccessful(Term(1), 1))
-    probe.expectMsg(AppendSuccessful(Term(1), 1))
+    actor.replicatedLog.commitedIndex should equal (-1)
+    commitedLog.commitedIndex should equal (2)
   }
 
 }

@@ -11,6 +11,10 @@ trait StateMetadata {
     def self: ActorRef
     def votes: Map[Term, Candidate]
     def currentTerm: Term
+
+    def commitIndex: Int
+    def lastAppliedIndex: Int
+
     def members: Vector[ActorRef]
     val others = members filterNot { _ == self }
 
@@ -29,12 +33,14 @@ trait StateMetadata {
   case class Meta(
     self: ActorRef,
     currentTerm: Term,
+    commitIndex: Int,
+    lastAppliedIndex: Int,
     members: Vector[ActorRef],
     votes: Map[Term, Candidate]
   ) extends Metadata {
     
     // transition helpers
-    def forNewElection: ElectionMeta = ElectionMeta(self, currentTerm.next, 0, members, votes)
+    def forNewElection: ElectionMeta = ElectionMeta(self, currentTerm.next, commitIndex, lastAppliedIndex, 0, members, votes)
 
     def withVote(term: Term, candidate: ActorRef) = {
       copy(votes = votes updated (term, candidate))
@@ -44,6 +50,8 @@ trait StateMetadata {
   case class ElectionMeta(
     self: ActorRef,
     currentTerm: Term,
+    commitIndex: Int,
+    lastAppliedIndex: Int,
     votesReceived: Int,
     members: Vector[ActorRef],
     votes: Map[Term, Candidate]
@@ -57,23 +65,25 @@ trait StateMetadata {
 
     def withVoteFor(term: Term, candidate: ActorRef) = copy(votes = votes + (term -> candidate))
 
-    def forLeader: LeaderMeta        = LeaderMeta(self, currentTerm, members)
-    def forFollower: Meta            = Meta(self, currentTerm, members, Map.empty)
+    def forLeader: LeaderMeta        = LeaderMeta(self, currentTerm, commitIndex, lastAppliedIndex, members)
+    def forFollower: Meta            = Meta(self, currentTerm, commitIndex, lastAppliedIndex, members, Map.empty)
     def forNewElection: ElectionMeta = this.forFollower.forNewElection
   }
 
   case class LeaderMeta(
     self: ActorRef,
     currentTerm: Term,
+    commitIndex: Int,
+    lastAppliedIndex: Int,
     members: Vector[ActorRef]
   ) extends Metadata {
 
     val votes = Map.empty[Term, Candidate]
 
-    def forFollower: Meta = Meta(self, currentTerm, members, Map.empty)
+    def forFollower: Meta = Meta(self, currentTerm, commitIndex, lastAppliedIndex, members, Map.empty)
   }
 
   object Meta {
-    def initial(implicit self: ActorRef) = new Meta(self, Term(0), Vector.empty, Map.empty)
+    def initial(implicit self: ActorRef) = new Meta(self, Term(0), -1, -1, Vector.empty, Map.empty)
   }
 }

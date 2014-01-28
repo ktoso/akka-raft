@@ -11,7 +11,6 @@ class LogIndexMapTest extends RaftSpec {
 
   "majority" should "find the index reached on the majority of members" in {
     // given
-//    val probe1, probe2 = mock[TestProbe] // todo use mockito, did not have mockito on airplane
     val probe1, probe2, probe3 = TestProbe()
 
     val matchIndex = LogIndexMap.initialize(immutable.Seq(probe1.ref, probe2.ref, probe3.ref), 0)
