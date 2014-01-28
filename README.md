@@ -10,8 +10,8 @@ Impl of https://ramcloud.stanford.edu/wiki/download/attachments/11370504/raft.pd
 Todo
 ====
 
-- [ ] election impl
-- [ ] log replication, committing
+- [x] election impl
+- [x] log replication, committing
 - [ ] handle commit on non-leader nodes
 - [ ] more torture tests
 - [ ] verify flow when catching up from "very behind"
