@@ -1,10 +1,16 @@
 package pl.project13.scala.akka.raft
 
 import pl.project13.scala.akka.raft.protocol._
+import org.scalatest.concurrent.Eventually
+import scala.concurrent.duration._
+import org.scalatest.time.{Millis, Span}
 
-class LeaderElectionTest extends RaftSpec(callingThreadDispatcher = false) {
+class LeaderElectionTest extends RaftSpec(callingThreadDispatcher = false)
+  with Eventually {
 
   behavior of "Leader Election"
+
+  override implicit val patienceConfig = PatienceConfig(timeout = scaled(Span(500, Millis)), interval = scaled(Span(100, Millis)))
 
   val memberCount = 5
 
@@ -24,12 +30,15 @@ class LeaderElectionTest extends RaftSpec(callingThreadDispatcher = false) {
     infoMemberStates()
 
     // then
-    val leaderCount = members.count(_.stateName == Leader)
-    val candidateCount = members.count(_.stateName == Candidate)
-    val followerCount = members.count(_.stateName == Follower)
+    eventually {
+      val leaderCount = members.count(_.stateName == Leader)
+      val candidateCount = members.count(_.stateName == Candidate)
+      val followerCount = members.count(_.stateName == Follower)
 
-    leaderCount should equal (1)
-    (candidateCount + followerCount) should equal (4)
+      leaderCount should equal (1)
+      candidateCount should equal (0)
+      followerCount should equal (4)
+    }
   }
 
   it should "elect replacement Leader if current Leader dies" in {
@@ -46,12 +55,15 @@ class LeaderElectionTest extends RaftSpec(callingThreadDispatcher = false) {
     info("New leader elected: ")
     infoMemberStates()
 
-    val leaderCount = members.count(_.stateName == Leader)
+    eventually {
+      val leaderCount = members.count(_.stateName == Leader)
       val candidateCount = members.count(_.stateName == Candidate)
       val followerCount = members.count(_.stateName == Follower)
 
       leaderCount should equal (1)
-      (candidateCount + followerCount) should equal (4)
+      candidateCount should equal (0)
+      followerCount should equal (3)
+    }
   }
 
   it should "be able to maintain the same leader for a long time" in {
