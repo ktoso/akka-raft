@@ -18,7 +18,7 @@ case class ReplicatedLog[Command](
 
   // log state
   def lastTerm  = entries.lastOption map { _.term } getOrElse Term(0)
-  def lastIndex = entries.length - 1
+  def lastIndex = entries.lastOption map { _.index } getOrElse 0
 
   def prevIndex = (lastIndex: @switch) match {
     case 0 => 0 // special handling of initial case, we don't go into negative indexes
@@ -42,19 +42,8 @@ case class ReplicatedLog[Command](
   def append(entry: Entry[Command], take: Int = entries.length): ReplicatedLog[Command] =
     append(List(entry), take)
 
-  def append(entriesToAppend: Seq[Entry[Command]], take: Int): ReplicatedLog[Command] = {
+  def append(entriesToAppend: Seq[Entry[Command]], take: Int): ReplicatedLog[Command] =
     copy(entries = entries.take(take) ++ entriesToAppend)
-//    if (maybeEntry(entriesToAppend.index) == Option(entriesToAppend)) {
-//      // Leader has sent us batches of data, before our Ack got to it, we can safely say "OK, got that one!"
-//      this
-//    } else {
-//      // it's a new entry, so we're appending to the log
-//      val allEntries = entries :+ entriesToAppend // todo make it come in with the right index rigth away
-//      require(allEntries.map(_.index).size == allEntries.map(_.index).toSet.size, "Must not allow duplicates in index!     " + entries + "    " + entriesToAppend)
-//
-//      copy(entries = allEntries)
-//    }
-  }
 
   def +(newEntry: Entry[Command]): ReplicatedLog[Command] =
     append(List(newEntry), entries.size)
@@ -64,10 +53,8 @@ case class ReplicatedLog[Command](
     if (entries.isDefinedAt(replicatedIndex)) {
       val localEntry = entries(replicatedIndex)
 
-      if (localEntry == replicatedEntry)
-        this // we're consistent with the replicated log
-      else
-        copy(entries = entries.slice(0, replicatedIndex) :+ replicatedEntry) // dropping everything until the entry that does not match
+      if (localEntry == replicatedEntry) this // we're consistent with the replicated log
+      else copy(entries = entries.slice(0, replicatedIndex) :+ replicatedEntry) // dropping everything until the entry that does not match
     } else {
       // nothing to drop
       this
@@ -102,7 +89,7 @@ case class ReplicatedLog[Command](
   }
 
   def termAt(index: Int) =
-    if (index < 0) Term(0)
+    if (index <= 0) Term(0)
     else entries(index).term
 
   def commitedEntries = entries.slice(0, commitedIndex)

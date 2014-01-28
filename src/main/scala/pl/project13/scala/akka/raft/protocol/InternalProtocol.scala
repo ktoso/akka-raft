@@ -24,7 +24,7 @@ trait InternalProtocol {
     /** currentTerm for leader to update in the `nextTerm` lookup table */
     def term: Term
   }
-  case class AppendRejected(term: Term)                   extends AppendResponse
+  case class AppendRejected(term: Term, lastIndex: Int)   extends AppendResponse
   case class AppendSuccessful(term: Term, lastIndex: Int) extends AppendResponse
 
   case object SendHeartbeat extends LeaderMessage

@@ -93,7 +93,7 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
 
     // then
     probe.expectMsg(AppendSuccessful(Term(1), 0))
-    probe.expectMsg(AppendRejected(Term(1)))
+    probe.expectMsg(AppendRejected(Term(1), 0))
   }
 
 }

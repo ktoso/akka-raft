@@ -30,6 +30,9 @@ case class LogIndexMap(private var backing: Map[ActorRef, Int]) {
     backing = backing.updated(member, value)
   }
 
+  def putIfGreater(member: ActorRef, value: Int): Int =
+    putIf(member, _ < _, value)
+
   /** @param compare (old, new) => should put? */
   def putIf(member: ActorRef, compare: (Int, Int) => Boolean, value: Int): Int = {
     val oldValue = backing(member)

@@ -11,20 +11,21 @@ class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false) {
   val memberCount = 5
 
   val timeout = 500.millis
-  
+
+  val client = TestProbe()
+
   it should "apply the state machine in expected order" in {
     // given
-    val client = TestProbe()
-    
     subscribeElectedLeader()
     awaitElectedLeader()
     infoMemberStates()
 
     // when
-    // todo duplication in api msg types!!!
-    leader ! ClientMessage(client.ref, AppendWord("I"))
-    leader ! ClientMessage(client.ref, AppendWord("like"))
-    leader ! ClientMessage(client.ref, AppendWord("bananas"))
+    // todo duplication in client message
+    leader ! ClientMessage(client.ref, AppendWord("I"))       // 0
+    leader ! ClientMessage(client.ref, AppendWord("like"))    // 1
+    leader ! ClientMessage(client.ref, AppendWord("bananas")) // 2
+    leader ! ClientMessage(client.ref, GetWords())            // 3
 
     // probe will get the messages once they're confirmed by quorum
     client.expectMsg(timeout, "I")
@@ -32,31 +33,30 @@ class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false) {
     client.expectMsg(timeout, "bananas")
 
     // then
-    leader ! ClientMessage(client.ref, GetWords())
     val got = client.expectMsg(timeout, List("I", "like", "bananas"))
     info(s"Final replicated state machine state: $got")
   }
 
   it should "replicate the missing entries to Follower which was down for a while" in {
     // given
-    val client = TestProbe()
     infoMemberStates()
 
     // when
-    val failingMembers = followers.take(3)
-    
-    failingMembers foreach { suspendMember(_) }
+//    val failingMembers = followers.take(3)
+//
+//    failingMembers foreach { suspendMember(_) }
 
-    leader ! ClientMessage(client.ref, AppendWord("and"))
-    leader ! ClientMessage(client.ref, AppendWord("apples"))
+    leader ! ClientMessage(client.ref, AppendWord("and"))    // 4
+    leader ! ClientMessage(client.ref, AppendWord("apples")) // 5
 
     // during this time it should not be able to respond...
-    Thread.sleep(500)
-
-    failingMembers foreach { restartMember(_) }
-    leader ! MembersChanged(members)
-
-    leader ! ClientMessage(client.ref, AppendWord("!"))
+//    Thread.sleep(300)
+//    infoMemberStates()
+//
+//    failingMembers foreach { restartMember(_) }
+//    leader ! MembersChanged(members)
+//
+    leader ! ClientMessage(client.ref, AppendWord("!"))      // 6
 
     // then
     // after all nodes came online again, raft should have been able to commit the messages!

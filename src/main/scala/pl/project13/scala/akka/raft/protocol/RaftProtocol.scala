@@ -27,6 +27,9 @@ trait RaftProtocol {
     entries: immutable.Seq[Entry[T]]
   ) extends RaftMessage {
 
+    def isHeartbeat = entries.isEmpty
+    def isNotHeartbeat = !isHeartbeat
+
     override def toString = s"""AppendEntries(term:$term,prevLog:($prevLogTerm,$prevLogIndex),entries:$entries)"""
   }
 
@@ -35,8 +38,8 @@ trait RaftProtocol {
       val entries = replicatedLog.entriesBatchFrom(fromIndex)
 
       entries.headOption match {
-        case Some(head) => new AppendEntries[T](term, head.prevTerm, head.prevIndex, entries)
-        case None       => new AppendEntries[T](term, Term(1), 1, Nil)
+        case Some(head) => new AppendEntries[T](term, replicatedLog.termAt(head.prevIndex), head.prevIndex, entries)
+        case _          => new AppendEntries[T](term, Term(1), 1, Nil)
       }
 
     }
