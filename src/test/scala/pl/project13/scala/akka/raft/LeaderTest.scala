@@ -1,12 +1,9 @@
 package pl.project13.scala.akka.raft
 
 import pl.project13.scala.akka.raft.protocol._
-import akka.testkit.{TestKit, TestProbe, ImplicitSender, TestFSMRef}
+import akka.testkit.{TestKit, TestProbe, TestFSMRef}
 import org.scalatest._
-import scala.collection.immutable
 import akka.actor.ActorSystem
-import pl.project13.scala.akka.raft.Entry
-import pl.project13.scala.akka.raft.AppendWord
 
 class LeaderTest extends TestKit(ActorSystem("test-system")) with FlatSpecLike
   with Matchers
@@ -43,11 +40,11 @@ class LeaderTest extends TestKit(ActorSystem("test-system")) with FlatSpecLike
     replicatedLog += Entry(AppendWord("c"), Term(1), 3)
 
     // when
-    val commitedLog = actor.maybeCommitEntry(matchIndex, replicatedLog)
+    val committedLog = actor.maybeCommitEntry(matchIndex, replicatedLog)
 
     // then
-    actor.replicatedLog.commitedIndex should equal (-1)
-    commitedLog.commitedIndex should equal (2)
+    actor.replicatedLog.committedIndex should equal (-1)
+    committedLog.committedIndex should equal (2)
   }
 
 }

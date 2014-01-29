@@ -5,7 +5,7 @@ import scala.annotation.switch
 
 case class ReplicatedLog[Command](
   entries: Vector[Entry[Command]],
-  commitedIndex: Int
+  committedIndex: Int
 ) {
 
   def commands = entries.map(_.command)
@@ -34,7 +34,7 @@ case class ReplicatedLog[Command](
 
   // log actions
   def commit(n: Int): ReplicatedLog[Command] =
-    copy(commitedIndex = n)
+    copy(committedIndex = n)
 
   def append(entry: Entry[Command], take: Int = entries.length): ReplicatedLog[Command] =
     append(List(entry), take)
@@ -78,7 +78,6 @@ case class ReplicatedLog[Command](
   def between(fromIndex: Int, toIndex: Int): Vector[Entry[Command]] =
     entries.slice(fromIndex + 1, toIndex + 1)
 
-
   def firstIndexInTerm(term: Term): Int = term.termNr match {
     case 0 => 0
     case 1 => 0
@@ -89,9 +88,9 @@ case class ReplicatedLog[Command](
     if (index <= 0) Term(0)
     else entries(index).term
 
-  def commitedEntries = entries.slice(0, commitedIndex)
+  def committedEntries = entries.slice(0, committedIndex)
 
-  def notCommitedEntries = entries.slice(commitedIndex + 1, entries.length)
+  def notcommittedEntries = entries.slice(committedIndex + 1, entries.length)
 }
 
 class EmptyReplicatedLog[T] extends ReplicatedLog[T](Vector.empty, -1) {

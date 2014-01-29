@@ -24,7 +24,8 @@ trait RaftProtocol {
     term: Term,
     prevLogTerm: Term,
     prevLogIndex: Int,
-    entries: immutable.Seq[Entry[T]]
+    entries: immutable.Seq[Entry[T]],
+    leaderCommitId: Int
   ) extends RaftMessage {
 
     def isHeartbeat = entries.isEmpty
@@ -34,12 +35,12 @@ trait RaftProtocol {
   }
 
   object AppendEntries {
-    def apply[T](term: Term, replicatedLog: ReplicatedLog[T], fromIndex: Int): AppendEntries[T] = {
+    def apply[T](term: Term, replicatedLog: ReplicatedLog[T], fromIndex: Int, leaderCommitId: Int): AppendEntries[T] = {
       val entries = replicatedLog.entriesBatchFrom(fromIndex)
 
       entries.headOption match {
-        case Some(head) => new AppendEntries[T](term, replicatedLog.termAt(head.prevIndex), head.prevIndex, entries)
-        case _          => new AppendEntries[T](term, Term(1), 1, Nil)
+        case Some(head) => new AppendEntries[T](term, replicatedLog.termAt(head.prevIndex), head.prevIndex, entries, leaderCommitId)
+        case _          => new AppendEntries[T](term, Term(1), 1, Nil, leaderCommitId)
       }
 
     }

@@ -3,7 +3,7 @@ package pl.project13.scala.akka.raft
 import org.scalatest._
 
 class ReplicatedLogTest extends FlatSpec with Matchers {
-  
+
   behavior of "ReplicatedLog"
 
   it should "should contain commands and terms when they were recieved by leader" in {
@@ -74,12 +74,12 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
     replicatedLog.lastIndex should equal (comittedLog.lastIndex)
     replicatedLog.lastTerm should equal (comittedLog.lastTerm)
 
-    replicatedLog.commitedIndex should equal (-1) // nothing ever comitted
-    comittedLog.commitedIndex should equal (comittedIndex)
+    replicatedLog.committedIndex should equal (-1) // nothing ever comitted
+    comittedLog.committedIndex should equal (comittedIndex)
 
-    comittedLog.commitedEntries should have length (2)
-    comittedLog.commitedEntries.head should equal (Entry("a", Term(1), 0, None))
-    comittedLog.commitedEntries.tail.head should equal (Entry("b", Term(2), 1, None))
+    comittedLog.committedEntries should have length (2)
+    comittedLog.committedEntries.head should equal (Entry("a", Term(1), 0, None))
+    comittedLog.committedEntries.tail.head should equal (Entry("b", Term(2), 1, None))
   }
 
   "isConsistentWith" should "be consistent for valid append within a term" in {
@@ -228,6 +228,20 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
     check2.entries.head.command should equal ("a")
     check2.entries.tail.head.command should equal ("C!!!")
     check2.entries should have length 2
+  }
+
+  "between" should "include 0th entry when asked between(-1, 0)" in {
+    // given
+    var replicatedLog = ReplicatedLog.empty[String]
+    val firstEntry = Entry("a", Term(1), 0)
+    replicatedLog += firstEntry
+
+    // when
+    val initialEntry = replicatedLog.between(-1, 0)
+
+    // then
+    initialEntry.headOption should be ('defined)
+    initialEntry.head should equal (firstEntry)
   }
 
 }

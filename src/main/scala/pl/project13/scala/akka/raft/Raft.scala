@@ -144,7 +144,7 @@ trait Raft[Command] extends LoggingFSM[RaftState, Metadata] with RaftStateMachin
 
       val entry = Entry(cmd, m.currentTerm, replicatedLog.nextIndex, Some(client))
 
-      log.info(s"entry = $entry")
+      log.info(s"adding to log: $entry")
       replicatedLog += entry
       log.info(s"log status = $replicatedLog")
 
@@ -167,7 +167,8 @@ trait Raft[Command] extends LoggingFSM[RaftState, Metadata] with RaftStateMachin
     follower ! AppendEntries(
       m.currentTerm,
       replicatedLog,
-      fromIndex = nextIndex.valueFor(follower)
+      fromIndex = nextIndex.valueFor(follower),
+      leaderCommitId = replicatedLog.committedIndex
     )
   }
 
@@ -227,7 +228,8 @@ trait Raft[Command] extends LoggingFSM[RaftState, Metadata] with RaftStateMachin
       member ! AppendEntries(
         m.currentTerm,
         replicatedLog,
-        fromIndex = nextIndex.valueFor(member)
+        fromIndex = nextIndex.valueFor(member),
+        leaderCommitId = replicatedLog.committedIndex
       )
     }
   }
@@ -254,18 +256,22 @@ trait Raft[Command] extends LoggingFSM[RaftState, Metadata] with RaftStateMachin
       }
 
       stay()
-    } else if (!replicatedLog.containsMatchingEntry(msg.prevLogTerm, msg.prevLogIndex)) {
-      if (msg.isNotHeartbeat) {
-        log.info("Rejecting write of (does not contain matching entry): " + msg + "; " + replicatedLog)
-        leader ! AppendRejected(m.currentTerm, replicatedLog.lastIndex)
-      }
-
-      stayAcceptingHeartbeat()
+//      todo think if needed?
+//    } else if (!replicatedLog.containsMatchingEntry(msg.prevLogTerm, msg.prevLogIndex)) {
+//      if (msg.isNotHeartbeat) {
+//        log.info("Rejecting write of (does not contain matching entry): " + msg + "; " + replicatedLog)
+//        leader ! AppendRejected(m.currentTerm, replicatedLog.lastIndex)
+//      }
+//
+//      stayAcceptingHeartbeat()
     } else {
       log.info("Appending: " + msg.entries)
       leader ! append(msg.entries, msg.prevLogIndex, m)
+      replicatedLog = commitUntilLeadersIndex(m, msg)
 
-      stayAcceptingHeartbeat() using m.copy(currentTerm = replicatedLog.lastTerm)
+      stayAcceptingHeartbeat() using m.copy(
+        currentTerm = replicatedLog.lastTerm
+      )
     }
 
   def leaderIsLagging(msg: AppendEntries[Command], m: Meta): Boolean =
@@ -277,8 +283,6 @@ trait Raft[Command] extends LoggingFSM[RaftState, Metadata] with RaftStateMachin
   def append(entries: immutable.Seq[Entry[Command]], atIndex: Int, m: Meta): AppendSuccessful = {
     replicatedLog = replicatedLog.append(entries, atIndex)
     log.debug("log after append: " + replicatedLog.entries)
-
-    // todo commit/apply on follower
 
     AppendSuccessful(replicatedLog.lastTerm, replicatedLog.lastIndex)
   }
@@ -346,14 +350,25 @@ trait Raft[Command] extends LoggingFSM[RaftState, Metadata] with RaftStateMachin
     }
   }
 
+  def commitUntilLeadersIndex(m: Meta, msg: AppendEntries[Command]): ReplicatedLog[Command] = {
+    val entries = replicatedLog.between(replicatedLog.committedIndex, msg.leaderCommitId)
+
+    entries.foldLeft(replicatedLog) { case (repLog, entry) =>
+      log.info(s"committing entry $entry on Follower, leader is committed until [${msg.leaderCommitId}}]")
+      apply(entry.command)
+
+      repLog.commit(entry.index)
+    }
+  }
+
   def maybeCommitEntry(matchIndex: LogIndexMap, replicatedLog: ReplicatedLog[Command]): ReplicatedLog[Command] = {
     val indexOnMajority = matchIndex.indexOnMajority
-    val willCommit = indexOnMajority > replicatedLog.commitedIndex
-    log.debug(s"Majority of members have index: $indexOnMajority persisted. (Comitted index: ${replicatedLog.commitedIndex}, will commit now: $willCommit)")
+    val willCommit = indexOnMajority > replicatedLog.committedIndex
+    log.debug(s"Majority of members have index: $indexOnMajority persisted. (Comitted index: ${replicatedLog.committedIndex}, will commit now: $willCommit)")
 
     if (willCommit) {
-      val entries = replicatedLog.between(replicatedLog.commitedIndex, indexOnMajority)
-      log.info(s"indexOnMajority:$indexOnMajority, replicatedLog.commitedIndex: ${replicatedLog.commitedIndex} => entries = $entries")
+      val entries = replicatedLog.between(replicatedLog.committedIndex, indexOnMajority)
+      log.info(s"Before commit; indexOnMajority:$indexOnMajority, replicatedLog.committedIndex: ${replicatedLog.committedIndex} => entries = $entries")
 
       entries foreach { entry =>
         log.info(s"Committing log at index: ${entry.index}; Applying command: ${entry.command}, will send result to client: ${entry.client}")
