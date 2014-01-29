@@ -12,7 +12,7 @@ Todo
 
 - [x] election impl
 - [x] log replication, committing
-- [ ] handle commit on non-leader nodes
+- [x] handle commit on non-leader nodes
 - [ ] more torture tests
 - [ ] verify flow when catching up from "very behind"
 - [ ] log compactation (snapshots) - expose user api for this?

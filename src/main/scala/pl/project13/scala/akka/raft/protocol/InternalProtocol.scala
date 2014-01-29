@@ -17,7 +17,7 @@ trait InternalProtocol {
   case class Reject(term: Term) extends ElectionMessage // todo needs better name
 
   case class ElectedAsLeader()   extends ElectionMessage
-  case object ElectionTimeout   extends ElectionMessage
+  case class ElectionTimeout(since: Long)   extends ElectionMessage
 
   /** When the Leader has sent an append, for an unexpected number, the Follower replies with this */
   sealed trait AppendResponse extends FollowerResponse {

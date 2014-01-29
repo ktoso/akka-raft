@@ -18,6 +18,9 @@ trait Raft[Command] extends LoggingFSM[RaftState, Metadata] with RaftStateMachin
   val HeartbeatTimerName = "heartbeat-timer"
   val ElectionTimeoutTimerName = "election-timer"
 
+  // todo fail much, so lol
+  var electionTimeoutDieOn = 0L
+
   // must be included in leader's heartbeat
   def highestCommittedTermNr = Term.Zero
 
@@ -68,9 +71,11 @@ trait Raft[Command] extends LoggingFSM[RaftState, Metadata] with RaftStateMachin
       appendEntries(msg, m)
 
     // need to start an election
-    case Event(ElectionTimeout, m: Meta) =>
-      log.info(s"Election timeout reached")
-      beginElection(m)
+    case Event(ElectionTimeout(since), m: Meta) =>
+      if (electionTimeoutStillValid(since))
+        beginElection(m)
+      else
+        stay()
   }
 
   when(Candidate) {
@@ -110,15 +115,19 @@ trait Raft[Command] extends LoggingFSM[RaftState, Metadata] with RaftStateMachin
 
     // end of election
 
-//     todo step down and handle in Follower
-
     case Event(append: AppendEntries[Entry[Command]], m: ElectionMeta) if append.term >= m.currentTerm =>
       log.info("Reverting to follower")
       goto(Follower) using m.forFollower
 
+    //     todo step down and handle in Follower
+    case Event(append: AppendEntries[Entry[Command]], m: ElectionMeta) =>
+      log.info("AAAA!")
+      self ! append
+      goto(Follower)
+
     // ending election due to timeout
-    case Event(ElectionTimeout, m: ElectionMeta) =>
-      log.debug("Voting timeout, starting a new election...")
+    case Event(ElectionTimeout(since), m: ElectionMeta) =>
+      log.debug(s"Voting timeout, starting a new election... (since: ${since})")
       self ! BeginElection
       stay() using m.forNewElection
   }
@@ -197,6 +206,8 @@ trait Raft[Command] extends LoggingFSM[RaftState, Metadata] with RaftStateMachin
       stopHeartbeat()
   }
 
+  initialize() // akka internals, MUST be last call in constructor
+
   // helpers -----------------------------------------------------------------------------------------------------------
 
   def logIndex: Int = replicatedLog.lastIndex
@@ -225,6 +236,13 @@ trait Raft[Command] extends LoggingFSM[RaftState, Metadata] with RaftStateMachin
 
   def replicateLog(m: LeaderMeta) {
     m.others foreach { member =>
+      log.info(s"""sending : ${AppendEntries(
+              m.currentTerm,
+              replicatedLog,
+              fromIndex = nextIndex.valueFor(member),
+              leaderCommitId = replicatedLog.committedIndex
+            )} to $member""")
+
       member ! AppendEntries(
         m.currentTerm,
         replicatedLog,
@@ -242,8 +260,11 @@ trait Raft[Command] extends LoggingFSM[RaftState, Metadata] with RaftStateMachin
     cancelTimer(ElectionTimeoutTimerName)
 
     val timeout = nextElectionTimeout
-//    log.debug("Resetting election timeout: " + timeout)
-    setTimer(ElectionTimeoutTimerName, ElectionTimeout, timeout, repeat = false)
+    val since = System.currentTimeMillis()
+    log.debug(s"Resetting election timeout: $timeout (since:$since)")
+
+    electionTimeoutDieOn = since + timeout.toMillis
+    setTimer(ElectionTimeoutTimerName, ElectionTimeout(since), timeout, repeat = false)
 
     timeout
   }
@@ -254,17 +275,12 @@ trait Raft[Command] extends LoggingFSM[RaftState, Metadata] with RaftStateMachin
         log.info("Rejecting write (leader is lagging) of: " + msg + "; " + replicatedLog)
         leader ! AppendRejected(m.currentTerm, replicatedLog.lastIndex) // no need to respond if only heartbeat
       }
-
       stay()
-//      todo think if needed?
-//    } else if (!replicatedLog.containsMatchingEntry(msg.prevLogTerm, msg.prevLogIndex)) {
-//      if (msg.isNotHeartbeat) {
-//        log.info("Rejecting write of (does not contain matching entry): " + msg + "; " + replicatedLog)
-//        leader ! AppendRejected(m.currentTerm, replicatedLog.lastIndex)
-//      }
-//
-//      stayAcceptingHeartbeat()
-    } else {
+
+    } else if (msg.isHeartbeat) {
+      stayAcceptingHeartbeat()
+
+    } else { //if (replicatedLog.containsMatchingEntry(msg.prevLogTerm, msg.prevLogIndex)) {
       log.info("Appending: " + msg.entries)
       leader ! append(msg.entries, msg.prevLogIndex, m)
       replicatedLog = commitUntilLeadersIndex(m, msg)
@@ -273,6 +289,12 @@ trait Raft[Command] extends LoggingFSM[RaftState, Metadata] with RaftStateMachin
         currentTerm = replicatedLog.lastTerm
       )
     }
+//    } else {
+//      log.info("Rejecting write of (does not contain matching entry): " + msg + "; " + replicatedLog)
+//      leader ! AppendRejected(m.currentTerm, replicatedLog.lastIndex)
+//
+//      stay()
+//    }
 
   def leaderIsLagging(msg: AppendEntries[Command], m: Meta): Boolean =
     msg.term < m.currentTerm
@@ -295,11 +317,22 @@ trait Raft[Command] extends LoggingFSM[RaftState, Metadata] with RaftStateMachin
     (fromMs + Random.nextInt(toMs.toInt - fromMs.toInt)).millis
   }
 
+  @inline private def electionTimeoutStillValid(since: Long) = {
+    val stillValid = electionTimeoutDieOn < System.currentTimeMillis()
+
+    if (stillValid)
+      log.info(s"Timeout reached (since: $since, ago: ${System.currentTimeMillis() - since})")
+
+    stillValid
+  }
+
   // named state changes
   /** Start a new election */
   def beginElection(m: Meta) = {
     resetElectionTimeout()
-    goto(Candidate) using m.forNewElection
+    log.info("Beginning new election")
+
+    goto(Candidate) using m.forNewElection forMax nextElectionTimeout
   }
 
   /** Stop being the Leader */
@@ -333,7 +366,7 @@ trait Raft[Command] extends LoggingFSM[RaftState, Metadata] with RaftStateMachin
     matchIndex.putIfGreater(follower, nextIndex.valueFor(follower))
     log.info(s"Follower $follower took write in term: $followerTerm, index: ${nextIndex.valueFor(follower)}")
 
-    nextIndex.incrementFor(follower)
+//    nextIndex.incrementFor(follower)
 
 //    sendOldEntriesIfLaggingClient(followerIndex, m)
 

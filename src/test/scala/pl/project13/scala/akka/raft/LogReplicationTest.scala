@@ -10,7 +10,7 @@ class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false) {
 
   val memberCount = 5
 
-  val timeout = 500.millis
+  val timeout = 2.second
 
   val client = TestProbe()
 
@@ -21,7 +21,6 @@ class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false) {
     infoMemberStates()
 
     // when
-    // todo duplication in client message
     leader ! ClientMessage(client.ref, AppendWord("I"))       // 0
     leader ! ClientMessage(client.ref, AppendWord("like"))    // 1
     leader ! ClientMessage(client.ref, AppendWord("bananas")) // 2
@@ -63,6 +62,10 @@ class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false) {
     client.expectMsg(timeout, "and")
     client.expectMsg(timeout, "apples")
     client.expectMsg(timeout, "!")
+  }
+
+  it should "" in {
+    
   }
 
 }
