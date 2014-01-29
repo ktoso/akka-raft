@@ -13,6 +13,7 @@ Todo
 - [x] election impl
 - [x] log replication, committing
 - [x] handle commit on non-leader nodes
+- [ ] Candidate -> Follower transition when got msg from Leader
 - [ ] more torture tests
 - [ ] verify flow when catching up from "very behind"
 - [ ] log compactation (snapshots) - expose user api for this?
