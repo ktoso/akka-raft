@@ -1,6 +1,8 @@
 package pl.project13.scala.akka.raft
 
-trait RaftStateMachine[Command] {
+trait RaftStateMachine {
+
+  type Command
 
   /**
    * Called when a command is determined by Raft to be safe to apply (comitted on majority of members).

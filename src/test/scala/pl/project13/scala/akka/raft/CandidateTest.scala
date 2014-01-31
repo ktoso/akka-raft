@@ -42,4 +42,18 @@ class CandidateTest extends RaftSpec with BeforeAndAfterEach
     candidate.stateName should equal (Candidate)
   }
 
+  it should "go back to Follower state if got message from elected Leader (from later Trerm)" in {
+    // given
+    subscribeBeginElection()
+
+    candidate.setState(Candidate, data)
+
+    // when
+    awaitBeginElection()
+
+    candidate ! AppendEntries(Term(4), Term(3), 6, Nil, 5)
+
+    // then
+  }
+
 }

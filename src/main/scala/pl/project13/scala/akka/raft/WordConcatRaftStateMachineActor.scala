@@ -3,7 +3,9 @@ package pl.project13.scala.akka.raft
 import akka.actor.{ActorRef, Actor}
 import scala.collection.mutable.ListBuffer
 
-class WordConcatRaftStateMachineActor extends Actor with Raft[Cmnd] {
+class WordConcatRaftStateMachineActor extends RaftActor {
+
+  type Command = Cmnd
 
   var words = ListBuffer[String]()
 
