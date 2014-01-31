@@ -7,19 +7,15 @@ Impl of https://ramcloud.stanford.edu/wiki/download/attachments/11370504/raft.pd
 
 **This is work in progress ;-)**
 
-Todo
-====
+Basic info
+===========
 
-- [x] election impl
-- [x] log replication, committing
-- [x] handle commit on non-leader nodes
-- [x] Candidate -> Follower transition when got msg from Leader
-- [ ] more torture tests
-- [ ] verify flow when catching up from "very behind"
-- [ ] log compactation (snapshots) - expose user api for this?
-- [ ] full key-store example docs
-- [ ] verify our logic behind the "did the right timeout trigger" makes sense IRL
-- [ ] make `akka-cluster` aware (react on nodes joining/leaving the cluster)
+Leader election and log replication works. Including "when nodes die".
+Should be more stress and long-running tested to verify though.
+
+Needs major cleanups in code;
+
+Other todos were moved to issues, the goal is to provide an akka-cluster aware example of "a zookeeper-like kv-store".
 
 License
 =======
