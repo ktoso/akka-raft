@@ -9,9 +9,7 @@ import protocol._
 import java.util.concurrent.TimeUnit
 
 trait RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
-  with Follower
-  with Candidate
-  with Leader
+  with Follower with Candidate with Leader
   with RaftStateMachine {
 
   type Command
@@ -19,20 +17,17 @@ trait RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
 
   private val config = context.system.settings.config
 
-  val HeartbeatTimerName = "heartbeat-timer"
-  val ElectionTimeoutTimerName = "election-timer"
+  private val HeartbeatTimerName = "heartbeat-timer"
+  private val ElectionTimeoutTimerName = "election-timer"
 
   // todo rethink if needed
   var electionTimeoutDieOn = 0L
 
-  // must be included in leader's heartbeat
-  def highestCommittedTermNr = Term.Zero
-
   // todo or move to Meta
   var replicatedLog = ReplicatedLog.empty[Command]
 
-  val minElectionTimeout = config.getDuration("akka.raft.election-timeout.min", TimeUnit.MILLISECONDS).millis
-  val maxElectionTimeout = config.getDuration("akka.raft.election-timeout.max", TimeUnit.MILLISECONDS).millis
+  private val minElectionTimeout = config.getDuration("akka.raft.election-timeout.min", TimeUnit.MILLISECONDS).millis
+  private val maxElectionTimeout = config.getDuration("akka.raft.election-timeout.max", TimeUnit.MILLISECONDS).millis
   def nextElectionTimeout: FiniteDuration = randomElectionTimeout(
     from = minElectionTimeout,
     to = maxElectionTimeout
@@ -105,6 +100,7 @@ trait RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
 
   def replicateLog(m: LeaderMeta) {
     m.others foreach { member =>
+      // todo remove me
       log.info(s"""sending : ${AppendEntries(
               m.currentTerm,
               replicatedLog,
@@ -136,46 +132,6 @@ trait RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
     setTimer(ElectionTimeoutTimerName, ElectionTimeout(since), timeout, repeat = false)
 
     timeout
-  }
-
-  def appendEntries(msg: AppendEntries[Command], m: Meta): State =
-    if (leaderIsLagging(msg, m)) {
-      if (msg.isNotHeartbeat) {
-        log.info("Rejecting write (leader is lagging) of: " + msg + "; " + replicatedLog)
-        leader ! AppendRejected(m.currentTerm, replicatedLog.lastIndex) // no need to respond if only heartbeat
-      }
-      stay()
-
-    } else if (msg.isHeartbeat) {
-      stayAcceptingHeartbeat()
-
-    } else { //if (replicatedLog.containsMatchingEntry(msg.prevLogTerm, msg.prevLogIndex)) {
-      log.info("Appending: " + msg.entries)
-      leader ! append(msg.entries, msg.prevLogIndex, m)
-      replicatedLog = commitUntilLeadersIndex(m, msg)
-
-      stayAcceptingHeartbeat() using m.copy(
-        currentTerm = replicatedLog.lastTerm
-      )
-    }
-//    } else {
-//      log.info("Rejecting write of (does not contain matching entry): " + msg + "; " + replicatedLog)
-//      leader ! AppendRejected(m.currentTerm, replicatedLog.lastIndex)
-//
-//      stay()
-//    }
-
-  def leaderIsLagging(msg: AppendEntries[Command], m: Meta): Boolean =
-    msg.term < m.currentTerm
-
-  /**
-   * @param atIndex is used to drop entries after this, and append our entries from there instead
-   */
-  def append(entries: immutable.Seq[Entry[Command]], atIndex: Int, m: Meta): AppendSuccessful = {
-    replicatedLog = replicatedLog.append(entries, atIndex)
-    log.debug("log after append: " + replicatedLog.entries)
-
-    AppendSuccessful(replicatedLog.lastTerm, replicatedLog.lastIndex)
   }
 
   private def randomElectionTimeout(from: FiniteDuration = 150.millis, to: FiniteDuration = 300.millis): FiniteDuration = {
@@ -219,7 +175,7 @@ trait RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
     val entries = replicatedLog.between(replicatedLog.committedIndex, msg.leaderCommitId)
 
     entries.foldLeft(replicatedLog) { case (repLog, entry) =>
-      log.info(s"committing entry $entry on Follower, leader is committed until [${msg.leaderCommitId}}]")
+      log.info(s"committing entry $entry on Follower, leader is committed until [${msg.leaderCommitId}]")
       apply(entry.command)
 
       repLog.commit(entry.index)
@@ -293,6 +249,47 @@ trait Follower {
       else
         stay()
   }
+
+  def appendEntries(msg: AppendEntries[Command], m: Meta): State =
+    if (leaderIsLagging(msg, m)) {
+      if (msg.isNotHeartbeat) {
+        log.info("Rejecting write (leader is lagging) of: " + msg + "; " + replicatedLog)
+        leader ! AppendRejected(m.currentTerm, replicatedLog.lastIndex) // no need to respond if only heartbeat
+      }
+      stay()
+
+    } else if (msg.isHeartbeat) {
+      stayAcceptingHeartbeat()
+
+    } else { //if (replicatedLog.containsMatchingEntry(msg.prevLogTerm, msg.prevLogIndex)) {
+      log.info("Appending: " + msg.entries)
+      println("leader = " + leader)
+      leader ! append(msg.entries, msg.prevLogIndex, m)
+      replicatedLog = commitUntilLeadersIndex(m, msg)
+
+      stayAcceptingHeartbeat() using m.copy(
+        currentTerm = replicatedLog.lastTerm
+      )
+    }
+//    } else {
+//      log.info("Rejecting write of (does not contain matching entry): " + msg + "; " + replicatedLog)
+//      leader ! AppendRejected(m.currentTerm, replicatedLog.lastIndex)
+//
+//      stay()
+//    }
+
+  def leaderIsLagging(msg: AppendEntries[Command], m: Meta): Boolean =
+    msg.term < m.currentTerm
+
+  /**
+   * @param atIndex is used to drop entries after this, and append our entries from there instead
+   */
+  def append(entries: immutable.Seq[Entry[Command]], atIndex: Int, m: Meta): AppendSuccessful = {
+    replicatedLog = replicatedLog.append(entries, atIndex)
+    log.debug("log after append: " + replicatedLog.entries)
+
+    AppendSuccessful(replicatedLog.lastTerm, replicatedLog.lastIndex)
+  }
 }
 
 
@@ -338,13 +335,8 @@ trait Candidate {
 
     case Event(append: AppendEntries[Entry[Command]], m: ElectionMeta) if append.term >= m.currentTerm =>
       log.info("Reverting to follower")
-      goto(Follower) using m.forFollower
-
-    //     todo step down and handle in Follower
-    case Event(append: AppendEntries[Entry[Command]], m: ElectionMeta) =>
-      log.info("AAAA!")
       self ! append
-      goto(Follower)
+      goto(Follower) using m.forFollower
 
     // ending election due to timeout
     case Event(ElectionTimeout(since), m: ElectionMeta) =>
@@ -403,8 +395,6 @@ trait Leader {
     nextIndex = LogIndexMap.initialize(members, replicatedLog.lastIndex)
     matchIndex = LogIndexMap.initialize(members, -1)
   }
-
-
 
   def sendEntries(follower: Member, m: LeaderMeta) {
     follower ! AppendEntries(

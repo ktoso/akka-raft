@@ -24,4 +24,4 @@ class WordConcatRaftStateMachineActor extends RaftActor {
 
 sealed trait Cmnd
 case class AppendWord(word: String)       extends Cmnd
-case class GetWords()                     extends Cmnd
+case class GetWords()                     extends Cmnd // todo make object

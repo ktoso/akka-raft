@@ -1,11 +1,14 @@
 package pl.project13.scala.akka.raft
 
 import pl.project13.scala.akka.raft.protocol._
-import akka.testkit.{ImplicitSender, TestFSMRef}
+import akka.testkit.{TestProbe, ImplicitSender, TestFSMRef}
 import org.scalatest.BeforeAndAfterEach
-import akka.actor.FSM.Event
+import scala.concurrent.duration._
+import org.scalatest.concurrent.Eventually
+import org.scalatest.time.{Millis, Span}
 
 class CandidateTest extends RaftSpec with BeforeAndAfterEach
+  with Eventually
   with ImplicitSender {
 
   behavior of "Candidate"
@@ -46,14 +49,23 @@ class CandidateTest extends RaftSpec with BeforeAndAfterEach
     // given
     subscribeBeginElection()
 
+    implicit val patienceConfig = PatienceConfig(timeout = scaled(Span(50, Millis)), interval = scaled(Span(5, Millis)))
+
+    val entry = Entry(AppendWord("x"), Term(3), 5)
     candidate.setState(Candidate, data)
 
     // when
-    awaitBeginElection()
-
-    candidate ! AppendEntries(Term(4), Term(3), 6, Nil, 5)
+    candidate ! AppendEntries(Term(3), Term(2), 6, entry :: Nil, 5)
+    Thread.sleep(50)
 
     // then
+    // should have reverted to Follower
+    candidate.stateName === Follower
+
+    // and applied the message in Follower
+    eventually {
+      candidate.underlyingActor.replicatedLog.entries contains entry
+    }
   }
 
 }
