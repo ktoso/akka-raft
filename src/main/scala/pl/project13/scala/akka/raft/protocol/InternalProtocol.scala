@@ -1,7 +1,7 @@
 package pl.project13.scala.akka.raft.protocol
 
 import akka.actor.ActorRef
-import pl.project13.scala.akka.raft.Term
+import pl.project13.scala.akka.raft.model.Term
 
 trait InternalProtocol {
 

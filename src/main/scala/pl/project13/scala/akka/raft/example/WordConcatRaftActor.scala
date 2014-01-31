@@ -1,9 +1,9 @@
-package pl.project13.scala.akka.raft
+package pl.project13.scala.akka.raft.example
 
-import akka.actor.{ActorRef, Actor}
 import scala.collection.mutable.ListBuffer
+import pl.project13.scala.akka.raft.RaftActor
 
-class WordConcatRaftStateMachineActor extends RaftActor {
+class WordConcatRaftActor extends RaftActor {
 
   type Command = Cmnd
 
@@ -17,11 +17,8 @@ class WordConcatRaftStateMachineActor extends RaftActor {
 
       word
 
-    case GetWords() =>
+    case GetWords =>
       words.toList
   }
 }
 
-sealed trait Cmnd
-case class AppendWord(word: String)       extends Cmnd
-case class GetWords()                     extends Cmnd // todo make object

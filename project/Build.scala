@@ -26,8 +26,8 @@ object Dependencies {
       "com.typesafe.akka" %% "akka-actor"     % akkaVersion,
       "com.typesafe.akka" %% "akka-cluster"   % akkaVersion,
       "com.typesafe.akka" %% "akka-slf4j"     % akkaVersion,
-      "org.scalatest"     %% "scalatest"      % "2.0"       % "test",
-      "com.typesafe.akka" %% "akka-testkit"   % akkaVersion % "test"
+      "com.typesafe.akka" %% "akka-testkit"   % akkaVersion % "test",
+      "org.scalatest"     %% "scalatest"      % "2.0"       % "test"
     )
   }
 

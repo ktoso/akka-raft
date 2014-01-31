@@ -1,11 +1,12 @@
 package pl.project13.scala.akka.raft
 
 import pl.project13.scala.akka.raft.protocol._
-import akka.testkit.{TestProbe, ImplicitSender, TestFSMRef}
+import akka.testkit.{ImplicitSender, TestFSMRef}
 import org.scalatest.BeforeAndAfterEach
-import scala.concurrent.duration._
 import org.scalatest.concurrent.Eventually
 import org.scalatest.time.{Millis, Span}
+import pl.project13.scala.akka.raft.example.{AppendWord, WordConcatRaftActor}
+import pl.project13.scala.akka.raft.model.{Entry, Term}
 
 class CandidateTest extends RaftSpec with BeforeAndAfterEach
   with Eventually
@@ -13,7 +14,7 @@ class CandidateTest extends RaftSpec with BeforeAndAfterEach
 
   behavior of "Candidate"
 
-  val candidate = TestFSMRef(new WordConcatRaftStateMachineActor with EventStreamAllMessages)
+  val candidate = TestFSMRef(new WordConcatRaftActor with EventStreamAllMessages)
 
   var data: ElectionMeta = _
   

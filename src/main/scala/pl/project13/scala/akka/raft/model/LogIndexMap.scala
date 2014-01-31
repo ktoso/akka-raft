@@ -1,4 +1,4 @@
-package pl.project13.scala.akka.raft
+package pl.project13.scala.akka.raft.model
 
 import akka.actor.ActorRef
 import scala.collection.immutable

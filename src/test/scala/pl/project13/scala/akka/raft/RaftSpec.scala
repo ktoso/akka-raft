@@ -7,6 +7,7 @@ import scala.concurrent.duration._
 import java.util.concurrent.TimeUnit
 import scala.reflect.ClassTag
 import akka.fsm.hack.TestFSMRefHack
+import pl.project13.scala.akka.raft.example.WordConcatRaftActor
 
 /**
  * @param callingThreadDispatcher if true, will run using one thread. Use this for FSM tests, otherwise set to false to
@@ -18,7 +19,7 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
   import protocol._
 
   // notice the EventStreamAllMessages, thanks to this we're able to wait for messages like "leader elected" etc.
-  private var _members: Vector[TestFSMRef[RaftState, Metadata, WordConcatRaftStateMachineActor]] = _
+  private var _members: Vector[TestFSMRef[RaftState, Metadata, WordConcatRaftActor]] = _
 
   def memberCount: Int
 
@@ -43,15 +44,15 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
    * > Use the "real" one for feature tests, so actors won't block each other in the CallingThread.
    * > Use the CallingThreadDispatcher for FSM tests, such as [[pl.project13.scala.akka.raft.CandidateTest]]
    */
-  def createActor(i: Int): TestFSMRef[RaftState, Metadata, WordConcatRaftStateMachineActor] = {
+  def createActor(i: Int): TestFSMRef[RaftState, Metadata, WordConcatRaftActor] = {
     if (callingThreadDispatcher)
       TestFSMRef(
-        (new WordConcatRaftStateMachineActor with EventStreamAllMessages).asInstanceOf[WordConcatRaftStateMachineActor], // hack, bleh
+        (new WordConcatRaftActor with EventStreamAllMessages).asInstanceOf[WordConcatRaftActor], // hack, bleh
         name = s"member-$i"
       )
     else
-      TestFSMRefHack[RaftState, Metadata, WordConcatRaftStateMachineActor](
-        Props(new WordConcatRaftStateMachineActor with EventStreamAllMessages).withDispatcher("raft-dispatcher"),
+      TestFSMRefHack[RaftState, Metadata, WordConcatRaftActor](
+        Props(new WordConcatRaftActor with EventStreamAllMessages).withDispatcher("raft-dispatcher"),
         name = s"member-$i"
       )
   }

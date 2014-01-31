@@ -1,8 +1,8 @@
 package pl.project13.scala.akka.raft.protocol
 
 import akka.actor.ActorRef
-import pl.project13.scala.akka.raft.{ReplicatedLog, Entry, Term}
 import scala.collection.immutable
+import pl.project13.scala.akka.raft.model.{Entry, ReplicatedLog, Term}
 
 trait RaftProtocol {
   sealed trait RaftMessage extends Message[Raft]

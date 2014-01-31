@@ -7,6 +7,7 @@ import scala.collection.immutable
 
 import protocol._
 import java.util.concurrent.TimeUnit
+import pl.project13.scala.akka.raft.model.{Entry, ReplicatedLog, Term, LogIndexMap}
 
 trait RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
   with Follower with Candidate with Leader

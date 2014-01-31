@@ -3,6 +3,7 @@ package pl.project13.scala.akka.raft
 import pl.project13.scala.akka.raft.protocol._
 import concurrent.duration._
 import akka.testkit.TestProbe
+import pl.project13.scala.akka.raft.example.{GetWords, AppendWord}
 
 class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false) {
 
@@ -24,7 +25,7 @@ class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false) {
     leader ! ClientMessage(client.ref, AppendWord("I"))       // 0
     leader ! ClientMessage(client.ref, AppendWord("like"))    // 1
     leader ! ClientMessage(client.ref, AppendWord("bananas")) // 2
-    leader ! ClientMessage(client.ref, GetWords())            // 3
+    leader ! ClientMessage(client.ref, GetWords)              // 3
 
     // probe will get the messages once they're confirmed by quorum
     client.expectMsg(timeout, "I")

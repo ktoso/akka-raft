@@ -1,4 +1,4 @@
-package pl.project13.scala.akka.raft
+package pl.project13.scala.akka.raft.model
 
 final case class Term(termNr: Long) extends AnyVal {
   def prev = this - 1

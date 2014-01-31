@@ -6,13 +6,15 @@ import akka.actor.Actor
 import org.scalatest.{OneInstancePerTest, BeforeAndAfterEach}
 import concurrent.duration._
 import scala.collection.immutable
+import pl.project13.scala.akka.raft.example.WordConcatRaftActor
+import pl.project13.scala.akka.raft.model.{Entry, Term}
 
 class FollowerTest extends RaftSpec with BeforeAndAfterEach
   with ImplicitSender {
 
   behavior of "Follower"
 
-  val follower = TestFSMRef(new WordConcatRaftStateMachineActor)
+  val follower = TestFSMRef(new WordConcatRaftActor)
 
   var data: Meta = _
   
