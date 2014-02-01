@@ -4,7 +4,7 @@ import akka.actor.ActorRef
 import pl.project13.scala.akka.raft.model.Term
 import pl.project13.scala.akka.raft.protocol.RaftStates.RaftState
 
-trait InternalProtocol {
+private[protocol] trait InternalProtocol extends Serializable {
 
   // todo maybe throw out
   // just some types to make it more clear when these messages are sent, not actualy used (could be stripped)
@@ -31,13 +31,8 @@ trait InternalProtocol {
   case object SendHeartbeat extends LeaderMessage
 
   // internal cluster related messages
-  sealed abstract class MembersChanged extends Message[Internal]
-  case class MemberAdded(member: ActorRef) extends MembersChanged
-  case class MemberRemoved(member: ActorRef) extends MembersChanged
-
-  // todo handle this smarter?
-  case object AskForState extends Message[Internal]
-  case class IAmInState(s: RaftState) extends Message[Internal]
+  sealed abstract class RaftMembershipMessage extends Message[Internal]
+  case class RaftMemberAdded(member: ActorRef) extends RaftMembershipMessage
+  case class RaftMemberRemoved(member: ActorRef) extends RaftMembershipMessage
 }
 
-object InternalProtocol extends InternalProtocol

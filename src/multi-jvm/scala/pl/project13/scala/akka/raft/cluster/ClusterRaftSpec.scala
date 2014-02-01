@@ -7,20 +7,24 @@ import akka.testkit.ImplicitSender
 import concurrent.duration._
 import akka.cluster.ClusterEvent.{CurrentClusterState, MemberUp}
 import akka.cluster.Cluster
-import akka.actor.Props
+import akka.actor.{RootActorPath, Props}
 import pl.project13.scala.akka.raft.example.cluster.WordConcatClusterRaftActor
-import pl.project13.scala.akka.raft.example.AppendWord
 import scala.concurrent.Await
-import pl.project13.scala.akka.raft.protocol.InternalProtocol.{IAmInState, AskForState}
-import pl.project13.scala.akka.raft.protocol.RaftStates
-import pl.project13.scala.akka.raft.protocol.RaftStates.Leader
+import pl.project13.scala.akka.raft.protocol.RaftStates.{Follower, Candidate, Leader}
+import pl.project13.scala.akka.raft.cluster.ClusterProtocol.{IAmInState, AskForState}
+import akka.pattern.ask
+import akka.util.Timeout
 
 object RaftClusterConfig extends MultiNodeConfig {
   val first = role("first")
   val second = role("second")
   val third = role("third")
 
-  val nodes = first :: second :: third :: Nil
+  val nodes = Map (
+    1 -> first,
+    2 -> second,
+    3 -> third
+  )
   
   commonConfig(
     ConfigFactory.parseResources("cluster.conf")
@@ -31,6 +35,8 @@ object RaftClusterConfig extends MultiNodeConfig {
 abstract class ClusterElectionSpec extends MultiNodeSpec(RaftClusterConfig)
   with FlatSpecLike with Matchers with BeforeAndAfterAll
   with ImplicitSender {
+
+  implicit val AskTimeout = Timeout(3.seconds)
 
   def initialParticipants = 3
 
@@ -48,7 +54,7 @@ abstract class ClusterElectionSpec extends MultiNodeSpec(RaftClusterConfig)
 
     Cluster(system) join firstAddress
 
-    (0 until initialParticipants) map { idx =>
+    (1 to initialParticipants) map { idx =>
       runOn(nodes(idx)) {
         system.actorOf(Props[WordConcatClusterRaftActor], s"member-$idx")
       }
@@ -62,24 +68,26 @@ abstract class ClusterElectionSpec extends MultiNodeSpec(RaftClusterConfig)
 
     testConductor.enter("all-up")
 
-    val member1 = Await.result(system.actorSelection("/user/member-1").resolveOne(1.second), atMost = 1.second)
-    val member2 = Await.result(system.actorSelection("/user/member-2").resolveOne(1.second), atMost = 1.second)
-    val member3 = Await.result(system.actorSelection("/user/member-3").resolveOne(1.second), atMost = 1.second)
+    val member1 = Await.result(system.actorSelection(RootActorPath(firstAddress) / "user" / "member-*").resolveOne(1.second), 1.second)
+    val member2 = Await.result(system.actorSelection(RootActorPath(secondAddress) / "user" / "member-*").resolveOne(1.second), 1.second)
+    val member3 = Await.result(system.actorSelection(RootActorPath(thirdAddress) / "user" / "member-*").resolveOne(1.second), 1.second)
 
-    Thread.sleep(5000)
+    // give raft a bit of time to discover nodes and elect a leader
+    Thread.sleep(1000)
 
-    member1 ! AskForState
-    member2 ! AskForState
-    member3 ! AskForState
+    val state1 = Await.result((member1 ? AskForState).mapTo[IAmInState], 200.millis)
+    val state2 = Await.result((member2 ? AskForState).mapTo[IAmInState], 200.millis)
+    val state3 = Await.result((member3 ? AskForState).mapTo[IAmInState], 200.millis)
+    
+    val states = state1 :: state2 :: state3 :: Nil
+    info("Cluster state:")
+    info(s"member-1 is ${state1.state}")
+    info(s"member-2 is ${state2.state}")
+    info(s"member-3 is ${state3.state}")
 
-    fishForMessage(5.seconds) {
-      case IAmInState(Leader) =>
-        info("Leader was elected!")
-        true
-      case other =>
-        info("Got message: " + other)
-        false
-    }
+    states.count(_.state == Leader) should equal (1)
+    states.count(_.state == Candidate) should equal (0)
+    states.count(_.state == Follower) should equal (2)
 
   }
 

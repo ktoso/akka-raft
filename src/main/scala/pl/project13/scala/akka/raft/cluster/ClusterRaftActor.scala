@@ -1,12 +1,12 @@
 package pl.project13.scala.akka.raft.cluster
 
-import akka.actor.{RootActorPath, Actor}
+import akka.actor.{ActorIdentity, Identify, RootActorPath, Actor}
 import akka.cluster.Cluster
 import akka.cluster.ClusterEvent._
 import akka.cluster.ClusterEvent.MemberUp
 import akka.cluster.ClusterEvent.UnreachableMember
 import pl.project13.scala.akka.raft.RaftActor
-import pl.project13.scala.akka.raft.protocol.InternalProtocol.MemberAdded
+import pl.project13.scala.akka.raft.protocol._
 import akka.util.Timeout
 import concurrent.duration._
 
@@ -32,11 +32,21 @@ trait ClusterRaftActor extends RaftActor {
   }
 
   override def aroundReceive(receive: Actor.Receive, msg: Any): Unit = msg match {
+
+    // members joining
     case MemberUp(member) =>
-        log.info("Member is Up: {}, adding to Raft cluster..", member.address)
-        val memberSelection = context.actorSelection(RootActorPath(member.address))
-        memberSelection.resolveOne() map { self ! MemberAdded(_) }
-      
+        log.info("Node is Up: {}, selecting and adding actors to Raft cluster..", member.address)
+        val memberSelection = context.actorSelection(RootActorPath(member.address) / "user" / "member-*")
+        memberSelection ! Identify(member.address)
+
+    case ActorIdentity(address, Some(raftActorRef)) =>
+      log.info(s"Adding actor {} to Raft cluster, from address: {}", raftActorRef, address)
+      self ! RaftMemberAdded(raftActorRef)
+
+    case ActorIdentity(address, None) =>
+      log.warning("Unable to find any raft-actors on node: {}", address)
+
+    // members going away
     case UnreachableMember(member) =>
       log.info("Member detected as unreachable: {}", member)
       // todo remove from raft

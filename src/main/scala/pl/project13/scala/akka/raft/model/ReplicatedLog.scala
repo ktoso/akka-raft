@@ -2,9 +2,9 @@ package pl.project13.scala.akka.raft.model
 
 import akka.actor.ActorRef
 import scala.annotation.switch
-import pl.project13.scala.akka.raft.model.Term
 
-case class ReplicatedLog[Command](
+case class
+ReplicatedLog[Command](
   entries: List[Entry[Command]],
   committedIndex: Int
 ) {

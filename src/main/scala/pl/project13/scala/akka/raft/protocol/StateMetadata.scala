@@ -3,7 +3,7 @@ package pl.project13.scala.akka.raft.protocol
 import akka.actor.ActorRef
 import pl.project13.scala.akka.raft.model.Term
 
-trait StateMetadata {
+private[protocol] trait StateMetadata extends Serializable {
 
   type Candidate = ActorRef
 
@@ -15,7 +15,7 @@ trait StateMetadata {
 //    def commitIndex: Int
     def lastAppliedIndex: Int
 
-    def members: List[ActorRef]
+    def members: Set[ActorRef]
     val others = members filterNot { _ == self }
 
 
@@ -34,7 +34,7 @@ trait StateMetadata {
     self: ActorRef,
     currentTerm: Term,
     lastAppliedIndex: Int,
-    members: List[ActorRef], // todo think if Vector makes sense here?
+    members: Set[ActorRef], // todo think if Vector makes sense here?
     votes: Map[Term, Candidate]
   ) extends Metadata {
     
@@ -51,7 +51,7 @@ trait StateMetadata {
     currentTerm: Term,
     lastAppliedIndex: Int,
     votesReceived: Int,
-    members: List[ActorRef],
+    members: Set[ActorRef],
     votes: Map[Term, Candidate]
   ) extends Metadata {
 
@@ -72,7 +72,7 @@ trait StateMetadata {
     self: ActorRef,
     currentTerm: Term,
     lastAppliedIndex: Int,
-    members: List[ActorRef]
+    members: Set[ActorRef]
   ) extends Metadata {
 
     val votes = Map.empty[Term, Candidate]
@@ -81,6 +81,6 @@ trait StateMetadata {
   }
 
   object Meta {
-    def initial(implicit self: ActorRef) = new Meta(self, Term(0), -1, List.empty, Map.empty)
+    def initial(implicit self: ActorRef) = new Meta(self, Term(0), -1, Set.empty, Map.empty)
   }
 }

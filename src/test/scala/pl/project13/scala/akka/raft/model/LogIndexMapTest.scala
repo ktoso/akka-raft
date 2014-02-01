@@ -1,7 +1,6 @@
 package pl.project13.scala.akka.raft.model
 
 import akka.testkit.TestProbe
-import scala.collection.immutable
 import pl.project13.scala.akka.raft.RaftSpec
 
 class LogIndexMapTest extends RaftSpec {
@@ -14,7 +13,7 @@ class LogIndexMapTest extends RaftSpec {
     // given
     val probe1, probe2, probe3 = TestProbe()
 
-    val matchIndex = LogIndexMap.initialize(immutable.Seq(probe1.ref, probe2.ref, probe3.ref), 0)
+    val matchIndex = LogIndexMap.initialize(Set(probe1.ref, probe2.ref, probe3.ref), 0)
 
     // given / then
     matchIndex.indexOnMajority should equal (0) // 0 0 0

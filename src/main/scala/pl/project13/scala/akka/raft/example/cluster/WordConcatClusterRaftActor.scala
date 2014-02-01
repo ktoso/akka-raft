@@ -1,8 +1,9 @@
 package pl.project13.scala.akka.raft.example.cluster
 
+import pl.project13.scala.akka.raft.example.protocol._
+
 import scala.collection.mutable.ListBuffer
 import pl.project13.scala.akka.raft.cluster.ClusterRaftActor
-import pl.project13.scala.akka.raft.example.{GetWords, AppendWord, Cmnd}
 
 class WordConcatClusterRaftActor extends ClusterRaftActor {
 

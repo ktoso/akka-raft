@@ -66,6 +66,6 @@ case class LogIndexMap(private var backing: Map[ActorRef, Int]) {
 }
 
 object LogIndexMap {
-  def initialize(members: immutable.Seq[ActorRef], initializeWith: Int) =
-    new LogIndexMap(Map(members.map(_ -> initializeWith): _*))
+  def initialize(members: Set[ActorRef], initializeWith: Int) =
+    new LogIndexMap(Map(members.toList.map(_ -> initializeWith): _*))
 }

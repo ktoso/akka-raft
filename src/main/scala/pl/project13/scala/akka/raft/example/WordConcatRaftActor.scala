@@ -1,5 +1,7 @@
 package pl.project13.scala.akka.raft.example
 
+import protocol._
+
 import scala.collection.mutable.ListBuffer
 import pl.project13.scala.akka.raft.RaftActor
 

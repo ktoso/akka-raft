@@ -4,10 +4,10 @@ import pl.project13.scala.akka.raft.protocol._
 import akka.testkit.{TestKit, TestProbe, TestFSMRef}
 import org.scalatest._
 import akka.actor.ActorSystem
-import pl.project13.scala.akka.raft.example.{AppendWord, WordConcatRaftActor}
+import pl.project13.scala.akka.raft.example.WordConcatRaftActor
 import pl.project13.scala.akka.raft.model.{Term, LogIndexMap}
-import pl.project13.scala.akka.raft.model
 import pl.project13.scala.akka.raft.protocol.RaftStates.Leader
+import pl.project13.scala.akka.raft.example.protocol._
 
 class LeaderTest extends TestKit(ActorSystem("test-system")) with FlatSpecLike
   with Matchers
@@ -24,7 +24,7 @@ class LeaderTest extends TestKit(ActorSystem("test-system")) with FlatSpecLike
     data = Meta.initial(leader)
       .copy(
         currentTerm = Term(1),
-        members = List(leader)
+        members = Set(leader)
       )
   }
 
@@ -33,7 +33,7 @@ class LeaderTest extends TestKit(ActorSystem("test-system")) with FlatSpecLike
     leader.setState(Leader, data)
     val actor = leader.underlyingActor
 
-    val matchIndex = LogIndexMap.initialize(List.empty, -1)
+    val matchIndex = LogIndexMap.initialize(Set.empty, -1)
     matchIndex.put(TestProbe().ref, 2)
     matchIndex.put(TestProbe().ref, 2)
     matchIndex.put(TestProbe().ref, 1)

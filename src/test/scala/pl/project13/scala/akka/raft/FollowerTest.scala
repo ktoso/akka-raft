@@ -2,7 +2,6 @@ package pl.project13.scala.akka.raft
 
 import pl.project13.scala.akka.raft.protocol._
 import akka.testkit.{ImplicitSender, TestProbe, TestFSMRef}
-import akka.actor.Actor
 import org.scalatest.{OneInstancePerTest, BeforeAndAfterEach}
 import concurrent.duration._
 import scala.collection.immutable
@@ -26,7 +25,7 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
     data = Meta.initial(follower)
       .copy(
         currentTerm = Term(2),
-        members = List(self)
+        members = Set(self)
       )
   }
 
@@ -81,7 +80,7 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
     data = Meta.initial(follower)
       .copy(
         currentTerm = Term(0),
-        members = List(self)
+        members = Set(self)
       )
     follower.setState(Follower, data)
 

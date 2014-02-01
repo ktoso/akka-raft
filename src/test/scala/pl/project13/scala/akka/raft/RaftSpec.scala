@@ -39,8 +39,7 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
     for {
       target    <- _members
       tellAbout <- _members
-      if target != tellAbout
-    } yield target ! MemberAdded(tellAbout)
+    } target ! RaftMemberAdded(tellAbout)
   }
 
 

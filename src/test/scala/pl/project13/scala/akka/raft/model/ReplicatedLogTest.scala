@@ -1,8 +1,7 @@
 package pl.project13.scala.akka.raft.model
 
 import org.scalatest._
-import pl.project13.scala.akka.raft.model.{ReplicatedLog, Term}
-import pl.project13.scala.akka.raft.model
+import pl.project13.scala.akka.raft.model._
 
 class ReplicatedLogTest extends FlatSpec with Matchers {
 
@@ -20,8 +19,8 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
 
     // when
     val frozenLog = replicatedLog
-    replicatedLog += model.Entry(command1, t1, 0)
-    replicatedLog += model.Entry(command2, t2, 1)
+    replicatedLog += Entry(command1, t1, 0)
+    replicatedLog += Entry(command2, t2, 1)
 
     // then
     frozenLog.entries should have length 0 // check for immutability
@@ -33,8 +32,8 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
     var replicatedLog = ReplicatedLog.empty[String]
 
     // when
-    replicatedLog += model.Entry("a", Term(1), 0)
-    replicatedLog += model.Entry("b", Term(1), 1)
+    replicatedLog += Entry("a", Term(1), 0)
+    replicatedLog += Entry("b", Term(1), 1)
 
     // then
     val commands = replicatedLog.entries.map(_.command).toList
@@ -44,13 +43,13 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
   it should "append with slicing some elements away (Leader forces us to drop some entries)" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String]
-    replicatedLog += model.Entry("a", Term(1), 0)
-    replicatedLog += model.Entry("D", Term(1), 1)
-    replicatedLog += model.Entry("D", Term(1), 2)
+    replicatedLog += Entry("a", Term(1), 0)
+    replicatedLog += Entry("D", Term(1), 1)
+    replicatedLog += Entry("D", Term(1), 2)
 
     val entries =
-      model.Entry("b", Term(1), 1) ::
-      model.Entry("c", Term(1), 2) ::
+      Entry("b", Term(1), 1) ::
+      Entry("c", Term(1), 2) ::
       Nil
 
     // when
@@ -64,9 +63,9 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
     // given
     var replicatedLog = ReplicatedLog.empty[String]
     replicatedLog = ReplicatedLog.empty[String]
-    replicatedLog = replicatedLog.append(model.Entry("a", Term(1), 0))
-    replicatedLog = replicatedLog.append(model.Entry("b", Term(2), 1))
-    replicatedLog = replicatedLog.append(model.Entry("a", Term(3), 2))
+    replicatedLog = replicatedLog.append(Entry("a", Term(1), 0))
+    replicatedLog = replicatedLog.append(Entry("b", Term(2), 1))
+    replicatedLog = replicatedLog.append(Entry("a", Term(3), 2))
 
     // when
     val comittedIndex = 2
@@ -80,15 +79,15 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
     comittedLog.committedIndex should equal (comittedIndex)
 
     comittedLog.committedEntries should have length (2)
-    comittedLog.committedEntries.head should equal (model.Entry("a", Term(1), 0, None))
-    comittedLog.committedEntries.tail.head should equal (model.Entry("b", Term(2), 1, None))
+    comittedLog.committedEntries.head should equal (Entry("a", Term(1), 0, None))
+    comittedLog.committedEntries.tail.head should equal (Entry("b", Term(2), 1, None))
   }
 
   "isConsistentWith" should "be consistent for valid append within a term" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String]
-    replicatedLog = replicatedLog.append(model.Entry("a", Term(1), 0)) // t1, 0
-    replicatedLog = replicatedLog.append(model.Entry("b", Term(1), 1)) // t1, 1
+    replicatedLog = replicatedLog.append(Entry("a", Term(1), 0)) // t1, 0
+    replicatedLog = replicatedLog.append(Entry("b", Term(1), 1)) // t1, 1
 
     // when / then
     replicatedLog.containsMatchingEntry(Term(1), 0) should equal (false)
@@ -99,7 +98,7 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
     // given
     val emptyLog = ReplicatedLog.empty[String]
     var replicatedLog = ReplicatedLog.empty[String]
-    replicatedLog += model.Entry("a", Term(1), 0)
+    replicatedLog += Entry("a", Term(1), 0)
 
     // when
     info(s"empty log: ${emptyLog}")
@@ -113,7 +112,7 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
   it should "be consistent for initial append" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String]
-    replicatedLog = replicatedLog.append(model.Entry("I", Term(1), 0))
+    replicatedLog = replicatedLog.append(Entry("I", Term(1), 0))
     info("replicated log = " + replicatedLog)
 
     // when / then
@@ -123,10 +122,10 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
   it should "be consistent with AppendEntries with multiple entries" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String]
-    replicatedLog = replicatedLog.append(model.Entry("a", Term(1), 0))
-    replicatedLog = replicatedLog.append(model.Entry("b", Term(1), 1))
-    replicatedLog = replicatedLog.append(model.Entry("b", Term(2), 2))
-    replicatedLog = replicatedLog.append(model.Entry("b", Term(3), 3))
+    replicatedLog = replicatedLog.append(Entry("a", Term(1), 0))
+    replicatedLog = replicatedLog.append(Entry("b", Term(1), 1))
+    replicatedLog = replicatedLog.append(Entry("b", Term(2), 2))
+    replicatedLog = replicatedLog.append(Entry("b", Term(3), 3))
 
     // when / then
     replicatedLog.containsMatchingEntry(Term(1), 0) should equal (false)
@@ -141,7 +140,7 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
   "prevTerm / prevIndex" should "be Term(0) / 0 after first write" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String]
-    replicatedLog = replicatedLog.append(model.Entry("a", Term(1), 0))
+    replicatedLog = replicatedLog.append(Entry("a", Term(1), 0))
 
     // when
     val prevTerm = replicatedLog.prevTerm
@@ -155,52 +154,52 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
   "entriesFrom" should "not include already sent entry, from given term" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String]
-    replicatedLog = replicatedLog.append(model.Entry("a", Term(1), 0))
-    replicatedLog = replicatedLog.append(model.Entry("b", Term(1), 1))
-    replicatedLog = replicatedLog.append(model.Entry("c", Term(2), 2))
-    replicatedLog = replicatedLog.append(model.Entry("d", Term(3), 3)) // other term
+    replicatedLog = replicatedLog.append(Entry("a", Term(1), 0))
+    replicatedLog = replicatedLog.append(Entry("b", Term(1), 1))
+    replicatedLog = replicatedLog.append(Entry("c", Term(2), 2))
+    replicatedLog = replicatedLog.append(Entry("d", Term(3), 3)) // other term
 
     // when
     val inTerm1 = replicatedLog.entriesBatchFrom(1)
 
     // then
     inTerm1 should have length 1
-    inTerm1(0) should equal (model.Entry("b", Term(1), 1))
+    inTerm1(0) should equal (Entry("b", Term(1), 1))
   }
 
   it should "not include already sent entries, from given term" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String]
-    replicatedLog = replicatedLog.append(model.Entry("a", Term(1), 0))
-    replicatedLog = replicatedLog.append(model.Entry("b", Term(1), 1))
-    replicatedLog = replicatedLog.append(model.Entry("c0", Term(2), 2))
-    replicatedLog = replicatedLog.append(model.Entry("c1", Term(2), 3))
-    replicatedLog = replicatedLog.append(model.Entry("c2", Term(2), 4))
-    replicatedLog = replicatedLog.append(model.Entry("d", Term(3), 5)) // other term
+    replicatedLog = replicatedLog.append(Entry("a", Term(1), 0))
+    replicatedLog = replicatedLog.append(Entry("b", Term(1), 1))
+    replicatedLog = replicatedLog.append(Entry("c0", Term(2), 2))
+    replicatedLog = replicatedLog.append(Entry("c1", Term(2), 3))
+    replicatedLog = replicatedLog.append(Entry("c2", Term(2), 4))
+    replicatedLog = replicatedLog.append(Entry("d", Term(3), 5)) // other term
 
     // when
     val entriesFrom2ndTerm = replicatedLog.entriesBatchFrom(2)
 
     // then
     entriesFrom2ndTerm should have length 3
-    entriesFrom2ndTerm(0) should equal (model.Entry("c0", Term(2), 2))
-    entriesFrom2ndTerm(1) should equal (model.Entry("c1", Term(2), 3))
-    entriesFrom2ndTerm(2) should equal (model.Entry("c2", Term(2), 4))
+    entriesFrom2ndTerm(0) should equal (Entry("c0", Term(2), 2))
+    entriesFrom2ndTerm(1) should equal (Entry("c1", Term(2), 3))
+    entriesFrom2ndTerm(2) should equal (Entry("c2", Term(2), 4))
   }
 
   "verifyOrDrop" should "not change if entries match" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String]
-    replicatedLog = replicatedLog.append(model.Entry("a", Term(1), 0))
-    replicatedLog = replicatedLog.append(model.Entry("b", Term(1), 1))
-    replicatedLog = replicatedLog.append(model.Entry("c", Term(2), 2))
-    replicatedLog = replicatedLog.append(model.Entry("d", Term(3), 3))
+    replicatedLog = replicatedLog.append(Entry("a", Term(1), 0))
+    replicatedLog = replicatedLog.append(Entry("b", Term(1), 1))
+    replicatedLog = replicatedLog.append(Entry("c", Term(2), 2))
+    replicatedLog = replicatedLog.append(Entry("d", Term(3), 3))
 
     // when
-    val check0 = replicatedLog.putWithDroppingInconsistent(model.Entry("a", Term(1), 0))
-    val check1 = replicatedLog.putWithDroppingInconsistent(model.Entry("b", Term(1), 1))
-    val check2 = replicatedLog.putWithDroppingInconsistent(model.Entry("c", Term(2), 2))
-    val check3 = replicatedLog.putWithDroppingInconsistent(model.Entry("d", Term(3), 3))
+    val check0 = replicatedLog.putWithDroppingInconsistent(Entry("a", Term(1), 0))
+    val check1 = replicatedLog.putWithDroppingInconsistent(Entry("b", Term(1), 1))
+    val check2 = replicatedLog.putWithDroppingInconsistent(Entry("c", Term(2), 2))
+    val check3 = replicatedLog.putWithDroppingInconsistent(Entry("d", Term(3), 3))
 
     // then
     check0 should equal (replicatedLog)
@@ -212,15 +211,15 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
   it should "drop elements after an index that does not match" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String]
-    replicatedLog = replicatedLog.append(model.Entry("a", Term(1), 0))
-    replicatedLog = replicatedLog.append(model.Entry("b", Term(1), 1))
-    replicatedLog = replicatedLog.append(model.Entry("c", Term(2), 2))
-    replicatedLog = replicatedLog.append(model.Entry("d", Term(3), 3))
+    replicatedLog = replicatedLog.append(Entry("a", Term(1), 0))
+    replicatedLog = replicatedLog.append(Entry("b", Term(1), 1))
+    replicatedLog = replicatedLog.append(Entry("c", Term(2), 2))
+    replicatedLog = replicatedLog.append(Entry("d", Term(3), 3))
 
     // when
-    val check0 = replicatedLog.putWithDroppingInconsistent(model.Entry("a", Term(1), 0))
-    val check1 = replicatedLog.putWithDroppingInconsistent(model.Entry("b", Term(1), 1))
-    val check2 = replicatedLog.putWithDroppingInconsistent(model.Entry("C!!!", Term(2), 1)) // different command
+    val check0 = replicatedLog.putWithDroppingInconsistent(Entry("a", Term(1), 0))
+    val check1 = replicatedLog.putWithDroppingInconsistent(Entry("b", Term(1), 1))
+    val check2 = replicatedLog.putWithDroppingInconsistent(Entry("C!!!", Term(2), 1)) // different command
 
     // then
     check0 should equal (replicatedLog)
@@ -235,7 +234,7 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
   "between" should "include 0th entry when asked between(-1, 0)" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String]
-    val firstEntry = model.Entry("a", Term(1), 0)
+    val firstEntry = Entry("a", Term(1), 0)
     replicatedLog += firstEntry
 
     // when

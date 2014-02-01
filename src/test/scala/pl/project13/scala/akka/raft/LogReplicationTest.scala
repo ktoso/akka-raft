@@ -3,7 +3,7 @@ package pl.project13.scala.akka.raft
 import pl.project13.scala.akka.raft.protocol._
 import concurrent.duration._
 import akka.testkit.TestProbe
-import pl.project13.scala.akka.raft.example.{GetWords, AppendWord}
+import pl.project13.scala.akka.raft.example.protocol._
 
 class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false) {
 
@@ -42,7 +42,7 @@ class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false) {
     infoMemberStates()
 
     // when
-    val failingMembers = followers.take(3)
+    val failingMembers = followers().take(3)
 
     failingMembers foreach { suspendMember(_) }
 
@@ -54,7 +54,7 @@ class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false) {
     infoMemberStates()
 
     failingMembers foreach { restartMember(_) }
-    members foreach { leader ! MemberAdded(_) }
+    members foreach { leader ! RaftMemberAdded(_) }
 
     leader ! ClientMessage(client.ref, AppendWord("!"))      // 6
 
@@ -63,10 +63,6 @@ class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false) {
     client.expectMsg(timeout, "and")
     client.expectMsg(timeout, "apples")
     client.expectMsg(timeout, "!")
-  }
-
-  it should "" in {
-    
   }
 
 }

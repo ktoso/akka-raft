@@ -32,9 +32,9 @@ class LeaderElectionTest extends RaftSpec(callingThreadDispatcher = false)
 
     // then
     eventually {
-      val leaderCount = members.count(_.stateName == Leader)
-      val candidateCount = members.count(_.stateName == Candidate)
-      val followerCount = members.count(_.stateName == Follower)
+      val leaderCount = members().count(_.stateName == Leader)
+      val candidateCount = members().count(_.stateName == Candidate)
+      val followerCount = members().count(_.stateName == Follower)
 
       leaderCount should equal (1)
       candidateCount should equal (0)
@@ -57,9 +57,9 @@ class LeaderElectionTest extends RaftSpec(callingThreadDispatcher = false)
     infoMemberStates()
 
     eventually {
-      val leaderCount = members.count(_.stateName == Leader)
-      val candidateCount = members.count(_.stateName == Candidate)
-      val followerCount = members.count(_.stateName == Follower)
+      val leaderCount = members().count(_.stateName == Leader)
+      val candidateCount = members().count(_.stateName == Candidate)
+      val followerCount = members().count(_.stateName == Follower)
 
       leaderCount should equal (1)
       candidateCount should equal (0)
@@ -72,13 +72,13 @@ class LeaderElectionTest extends RaftSpec(callingThreadDispatcher = false)
     subscribeElectedLeader()
 
     // when
-    val memberStates1 = members.sortBy(_.path.elements.last).map(_.stateName)
+    val memberStates1 = members().sortBy(_.path.elements.last).map(_.stateName)
     Thread.sleep(50)
-    val memberStates2 = members.sortBy(_.path.elements.last).map(_.stateName)
+    val memberStates2 = members().sortBy(_.path.elements.last).map(_.stateName)
     Thread.sleep(50)
-    val memberStates3 = members.sortBy(_.path.elements.last).map(_.stateName)
+    val memberStates3 = members().sortBy(_.path.elements.last).map(_.stateName)
     Thread.sleep(50)
-    val memberStates4 = members.sortBy(_.path.elements.last).map(_.stateName)
+    val memberStates4 = members().sortBy(_.path.elements.last).map(_.stateName)
 
     info("Maintained state:")
     infoMemberStates()

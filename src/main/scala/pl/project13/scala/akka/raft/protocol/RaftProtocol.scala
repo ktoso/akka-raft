@@ -4,7 +4,7 @@ import akka.actor.ActorRef
 import scala.collection.immutable
 import pl.project13.scala.akka.raft.model.{Entry, ReplicatedLog, Term}
 
-trait RaftProtocol {
+private[protocol] trait RaftProtocol extends Serializable {
   sealed trait RaftMessage extends Message[Raft]
 
   /**
