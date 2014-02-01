@@ -11,7 +11,7 @@ Basic info
 ===========
 
 Leader election and log replication works. Including "when nodes die".
-Cluster (backed by akka-cluster) awareness is in progress.
+Cluster (backed by akka-cluster _experimental_) awareness is in progress.
 
 Other todos were moved to issues, the goal is to provide an akka-cluster aware example of "a zookeeper-like kv-store".
 
