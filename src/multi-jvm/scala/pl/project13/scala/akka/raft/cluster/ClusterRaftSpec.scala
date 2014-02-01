@@ -21,15 +21,13 @@ object RaftClusterConfig extends MultiNodeConfig {
   )
 }
 
-class ClusterElectionJvmNode1 extends
-
 abstract class ClusterElectionSpec extends MultiNodeSpec(RaftClusterConfig)
   with FlatSpecLike with Matchers with BeforeAndAfterAll
   with ImplicitSender {
 
-  val raftClusterSize = 3
+  def initialParticipants = 3
 
-  behavior of s"Leader election on cluster of $raftClusterSize nodes"
+  behavior of s"Leader election on cluster of $initialParticipants nodes"
 
   import RaftClusterConfig._
 
@@ -43,7 +41,7 @@ abstract class ClusterElectionSpec extends MultiNodeSpec(RaftClusterConfig)
 
     Cluster(system) join firstAddress
 
-    val members = (1 to raftClusterSize) map { n =>
+    val members = (1 to initialParticipants) map { n =>
       system.actorOf(Props[WordConcatClusterRaftActor], s"member-$n")
     }
 
@@ -56,3 +54,7 @@ abstract class ClusterElectionSpec extends MultiNodeSpec(RaftClusterConfig)
   }
 
 }
+
+class ClusterElectionSpecMultiJvmNode1 extends ClusterElectionSpec
+class ClusterElectionSpecMultiJvmNode2 extends ClusterElectionSpec
+class ClusterElectionSpecMultiJvmNode3 extends ClusterElectionSpec
