@@ -5,7 +5,6 @@ import akka.testkit.{TestProbe, TestFSMRef, TestKit}
 import akka.actor._
 import scala.concurrent.duration._
 import java.util.concurrent.TimeUnit
-import scala.reflect.ClassTag
 import akka.fsm.hack.TestFSMRefHack
 import pl.project13.scala.akka.raft.example.WordConcatRaftActor
 
@@ -13,8 +12,8 @@ import pl.project13.scala.akka.raft.example.WordConcatRaftActor
  * @param callingThreadDispatcher if true, will run using one thread. Use this for FSM tests, otherwise set to false to
  *                                enable a "really threading" dispatcher (see config for `raft-dispatcher`).
  */
-abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit(ActorSystem("raft-test")) with FlatSpecLike with Matchers
-  with BeforeAndAfterAll with BeforeAndAfterEach {
+abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit(ActorSystem("raft-test"))
+  with FlatSpecLike with Matchers with BeforeAndAfterAll with BeforeAndAfterEach {
 
   import protocol._
 

@@ -23,8 +23,11 @@ trait ClusterRaftActor extends RaftActor {
   override def aroundReceive(receive: Actor.Receive, msg: Any): Unit = msg match {
     case MemberUp(member) =>
         log.info("Member is Up: {}", member.address)
+//        self ! MembersChanged // todo
+
     case UnreachableMember(member) =>
       log.info("Member detected as unreachable: {}", member)
+
     case MemberRemoved(member, previousStatus) =>
       log.info("Member is Removed: {} after {}", member.address, previousStatus)
 
