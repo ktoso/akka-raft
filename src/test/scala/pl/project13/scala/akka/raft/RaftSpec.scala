@@ -18,7 +18,7 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
   import protocol._
 
   // notice the EventStreamAllMessages, thanks to this we're able to wait for messages like "leader elected" etc.
-  private var _members: Vector[TestFSMRef[RaftState, Metadata, WordConcatRaftActor]] = _
+  private var _members: List[TestFSMRef[RaftState, Metadata, WordConcatRaftActor]] = _
 
   def memberCount: Int
 
@@ -31,10 +31,15 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
   override def beforeAll() {
     super.beforeAll()
 
-    _members = (1 to memberCount).toVector map { i =>
+    _members = (1 to memberCount).toList map { i =>
       createActor(i)
     }
-    _members foreach { _ ! MembersChanged(_members) }
+
+    for {
+      target    <- _members
+      tellAbout <- _members
+      if target != tellAbout
+    } yield target ! MemberAdded(tellAbout)
   }
 
 

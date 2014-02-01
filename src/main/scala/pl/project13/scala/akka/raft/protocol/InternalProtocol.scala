@@ -30,5 +30,9 @@ trait InternalProtocol {
   case object SendHeartbeat extends LeaderMessage
 
   // internal cluster related messages
-  case class MembersChanged(members: Vector[ActorRef])
+  sealed abstract class MembersChanged
+  case class MemberAdded(member: ActorRef) extends MembersChanged
+  case class MemberRemoved(member: ActorRef) extends MembersChanged
 }
+
+object InternalProtocol extends InternalProtocol

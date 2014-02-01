@@ -9,6 +9,7 @@ import akka.cluster.ClusterEvent.{CurrentClusterState, MemberUp}
 import akka.cluster.Cluster
 import akka.actor.Props
 import pl.project13.scala.akka.raft.example.cluster.WordConcatClusterRaftActor
+import pl.project13.scala.akka.raft.example.AppendWord
 
 object RaftClusterConfig extends MultiNodeConfig {
   val first = role("first")
@@ -46,11 +47,16 @@ abstract class ClusterElectionSpec extends MultiNodeSpec(RaftClusterConfig)
     }
 
     receiveN(3).collect { case MemberUp(m) => m.address }.toSet should be(
-      Set(firstAddress, secondAddress, thirdAddress))
+      Set(firstAddress, secondAddress, thirdAddress)
+    )
 
     Cluster(system).unsubscribe(testActor)
 
     testConductor.enter("all-up")
+
+    Thread.sleep(5000)
+
+    members(0) ! AppendWord("I")
   }
 
 }

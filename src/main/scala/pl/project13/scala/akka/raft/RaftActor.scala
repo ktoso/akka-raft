@@ -37,9 +37,9 @@ trait RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
   val heartbeatInterval: FiniteDuration = config.getDuration("akka.raft.heartbeat-interval", TimeUnit.MILLISECONDS).millis
 
   // todo or move to Meta
-  var nextIndex = LogIndexMap.initialize(Vector.empty, replicatedLog.lastIndex)
+  var nextIndex = LogIndexMap.initialize(List.empty, replicatedLog.lastIndex)
   // todo or move to Meta
-  var matchIndex = LogIndexMap.initialize(Vector.empty, -1)
+  var matchIndex = LogIndexMap.initialize(List.empty, -1)
 
   override def preStart() {
     val timeout = resetElectionTimeout()
@@ -55,10 +55,14 @@ trait RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
   when(Leader)(leaderBehavior)
 
   whenUnhandled {
-    case Event(MembersChanged(newMembers), data: Meta) =>
-      log.info(s"Members changed, current: ${data.members}, updating to: $newMembers")
+    case Event(MemberAdded(newMember), m: Meta) =>
+      log.info(s"Members changed, current: ${m.members}, adding: $newMember")
+
       // todo migration period initiated here, right?
-      stay() using data.copy(members = newMembers)
+      stay() using m.copy(members = newMember :: m.members)
+
+    case Event(MemberRemoved(removed), m: Meta) =>
+      ???
   }
 
   onTransition {
@@ -88,7 +92,7 @@ trait RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
   }
 
   def startHeartbeat(m: LeaderMeta) {
-//  def startHeartbeat(currentTerm: Term, members: Vector[ActorRef]) {
+//  def startHeartbeat(currentTerm: Term, members: List[ActorRef]) {
     sendHeartbeat(m)
     log.info(s"Starting hearbeat, with interval: $heartbeatInterval")
     setTimer(HeartbeatTimerName, SendHeartbeat, heartbeatInterval, repeat = true)

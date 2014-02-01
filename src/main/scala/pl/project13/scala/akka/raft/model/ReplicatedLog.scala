@@ -5,7 +5,7 @@ import scala.annotation.switch
 import pl.project13.scala.akka.raft.model.Term
 
 case class ReplicatedLog[Command](
-  entries: Vector[Entry[Command]],
+  entries: List[Entry[Command]],
   committedIndex: Int
 ) {
 
@@ -64,7 +64,7 @@ case class ReplicatedLog[Command](
   def apply(idx: Int): Entry[Command] = entries(idx)
 
   /** @param fromIncluding index from which to start the slice (excluding the entry at that index) */
-  def entriesBatchFrom(fromIncluding: Int, howMany: Int = 5): Vector[Entry[Command]] = {
+  def entriesBatchFrom(fromIncluding: Int, howMany: Int = 5): List[Entry[Command]] = {
     val toSend = entries.slice(fromIncluding, fromIncluding + howMany)
     toSend.headOption match {
       case Some(head) =>
@@ -72,11 +72,11 @@ case class ReplicatedLog[Command](
         toSend.takeWhile(_.term == batchTerm) // we only batch commands grouped by their term
 
       case None =>
-        Vector.empty
+        List.empty
     }
   }
 
-  def between(fromIndex: Int, toIndex: Int): Vector[Entry[Command]] =
+  def between(fromIndex: Int, toIndex: Int): List[Entry[Command]] =
     entries.slice(fromIndex + 1, toIndex + 1)
 
   def firstIndexInTerm(term: Term): Int = term.termNr match {
@@ -94,7 +94,7 @@ case class ReplicatedLog[Command](
   def notcommittedEntries = entries.slice(committedIndex + 1, entries.length)
 }
 
-class EmptyReplicatedLog[T] extends ReplicatedLog[T](Vector.empty, -1) {
+class EmptyReplicatedLog[T] extends ReplicatedLog[T](List.empty, -1) {
   override def lastTerm = Term(0)
   override def lastIndex = 0
 }

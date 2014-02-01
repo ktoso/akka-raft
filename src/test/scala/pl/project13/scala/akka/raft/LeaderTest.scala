@@ -23,7 +23,7 @@ class LeaderTest extends TestKit(ActorSystem("test-system")) with FlatSpecLike
     data = Meta.initial(leader)
       .copy(
         currentTerm = Term(1),
-        members = Vector(leader)
+        members = List(leader)
       )
   }
 
@@ -32,7 +32,7 @@ class LeaderTest extends TestKit(ActorSystem("test-system")) with FlatSpecLike
     leader.setState(Leader, data)
     val actor = leader.underlyingActor
 
-    val matchIndex = LogIndexMap.initialize(Vector.empty, -1)
+    val matchIndex = LogIndexMap.initialize(List.empty, -1)
     matchIndex.put(TestProbe().ref, 2)
     matchIndex.put(TestProbe().ref, 2)
     matchIndex.put(TestProbe().ref, 1)

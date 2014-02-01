@@ -25,7 +25,7 @@ class CandidateTest extends RaftSpec with BeforeAndAfterEach
     data = Meta.initial(candidate)
       .copy(
         currentTerm = Term(2),
-        members = Vector(self)
+        members = List(self)
       ).forNewElection
   }
 

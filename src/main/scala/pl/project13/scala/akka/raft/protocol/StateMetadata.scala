@@ -15,7 +15,7 @@ trait StateMetadata {
 //    def commitIndex: Int
     def lastAppliedIndex: Int
 
-    def members: Vector[ActorRef]
+    def members: List[ActorRef]
     val others = members filterNot { _ == self }
 
 
@@ -33,9 +33,8 @@ trait StateMetadata {
   case class Meta(
     self: ActorRef,
     currentTerm: Term,
-//    commitIndex: Int,
     lastAppliedIndex: Int,
-    members: Vector[ActorRef],
+    members: List[ActorRef], // todo think if Vector makes sense here?
     votes: Map[Term, Candidate]
   ) extends Metadata {
     
@@ -52,7 +51,7 @@ trait StateMetadata {
     currentTerm: Term,
     lastAppliedIndex: Int,
     votesReceived: Int,
-    members: Vector[ActorRef],
+    members: List[ActorRef],
     votes: Map[Term, Candidate]
   ) extends Metadata {
 
@@ -73,7 +72,7 @@ trait StateMetadata {
     self: ActorRef,
     currentTerm: Term,
     lastAppliedIndex: Int,
-    members: Vector[ActorRef]
+    members: List[ActorRef]
   ) extends Metadata {
 
     val votes = Map.empty[Term, Candidate]
@@ -82,6 +81,6 @@ trait StateMetadata {
   }
 
   object Meta {
-    def initial(implicit self: ActorRef) = new Meta(self, Term(0), -1, Vector.empty, Map.empty)
+    def initial(implicit self: ActorRef) = new Meta(self, Term(0), -1, List.empty, Map.empty)
   }
 }

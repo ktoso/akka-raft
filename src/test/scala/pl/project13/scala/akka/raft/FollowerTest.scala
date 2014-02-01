@@ -25,7 +25,7 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
     data = Meta.initial(follower)
       .copy(
         currentTerm = Term(2),
-        members = Vector(self)
+        members = List(self)
       )
   }
 
@@ -80,7 +80,7 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
     data = Meta.initial(follower)
       .copy(
         currentTerm = Term(0),
-        members = Vector(self)
+        members = List(self)
       )
     follower.setState(Follower, data)
 

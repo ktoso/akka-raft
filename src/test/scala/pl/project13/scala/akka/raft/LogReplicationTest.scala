@@ -54,7 +54,7 @@ class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false) {
     infoMemberStates()
 
     failingMembers foreach { restartMember(_) }
-    leader ! MembersChanged(members)
+    members foreach { leader ! MemberAdded(_) }
 
     leader ! ClientMessage(client.ref, AppendWord("!"))      // 6
 
