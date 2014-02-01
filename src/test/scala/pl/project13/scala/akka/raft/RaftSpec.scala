@@ -7,6 +7,7 @@ import scala.concurrent.duration._
 import java.util.concurrent.TimeUnit
 import akka.fsm.hack.TestFSMRefHack
 import pl.project13.scala.akka.raft.example.WordConcatRaftActor
+import pl.project13.scala.akka.raft.protocol.RaftStates.{Candidate, Follower, Leader, RaftState}
 
 /**
  * @param callingThreadDispatcher if true, will run using one thread. Use this for FSM tests, otherwise set to false to

@@ -7,6 +7,7 @@ import akka.actor.ActorSystem
 import pl.project13.scala.akka.raft.example.{AppendWord, WordConcatRaftActor}
 import pl.project13.scala.akka.raft.model.{Term, LogIndexMap}
 import pl.project13.scala.akka.raft.model
+import pl.project13.scala.akka.raft.protocol.RaftStates.Leader
 
 class LeaderTest extends TestKit(ActorSystem("test-system")) with FlatSpecLike
   with Matchers

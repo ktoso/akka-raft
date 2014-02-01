@@ -39,11 +39,14 @@ trait ClusterRaftActor extends RaftActor {
       
     case UnreachableMember(member) =>
       log.info("Member detected as unreachable: {}", member)
+      // todo remove from raft
 
     case MemberRemoved(member, previousStatus) =>
       log.info("Member is Removed: {} after {}", member.address, previousStatus)
+      // todo remove from raft
 
-    case _: MemberEvent => // ignore
+    case _: MemberEvent =>
+      // ignore
 
     case _ =>
       // everything else just push to the RaftActor's receive

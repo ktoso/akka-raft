@@ -8,6 +8,7 @@ import scala.collection.immutable
 import protocol._
 import java.util.concurrent.TimeUnit
 import pl.project13.scala.akka.raft.model.{Entry, ReplicatedLog, Term, LogIndexMap}
+import pl.project13.scala.akka.raft.protocol.RaftStates._
 
 trait RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
   with Follower with Candidate with Leader
@@ -56,7 +57,7 @@ trait RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
 
   whenUnhandled {
     case Event(MemberAdded(newMember), m: Meta) =>
-      log.info(s"Members changed, current: ${m.members}, adding: $newMember")
+      log.info(s"Members changed, current: [size = ${m.members.size}] ${m.members}, adding: $newMember")
 
       // todo migration period initiated here, right?
       stay() using m.copy(members = newMember :: m.members)
@@ -304,7 +305,7 @@ trait Candidate {
   val candidateBehavior: StateFunction = {
     // election
     case Event(BeginElection, m: ElectionMeta) =>
-      log.debug(s"Initializing election for ${m.currentTerm}")
+      log.debug(s"Initializing election (among ${m.members.size} nodes) for ${m.currentTerm}")
 
       val request = RequestVote(m.currentTerm, self, replicatedLog.lastTerm, replicatedLog.lastIndex)
       m.membersExceptSelf foreach { _ ! request }
@@ -344,11 +345,18 @@ trait Candidate {
       goto(Follower) using m.forFollower
 
     // ending election due to timeout
-    case Event(ElectionTimeout(since), m: ElectionMeta) =>
-      log.debug(s"Voting timeout, starting a new election... (since: ${since})")
+    case Event(ElectionTimeout(since), m: ElectionMeta) if m.members.size > 1 =>
+      log.debug(s"Voting timeout, starting a new election (among ${m.members.size})...")
       self ! BeginElection
       stay() using m.forNewElection
-      }
+
+    // would like to start election, but I'm all alone! ;-(
+    case Event(ElectionTimeout(since), m: ElectionMeta) =>
+      log.debug(s"Voting timeout, unable to start election, know no nodes that (among ${m.members.size})...")
+      self ! BeginElection
+      stay() using m.forNewElection
+  }
+
 }
 
 

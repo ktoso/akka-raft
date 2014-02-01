@@ -2,6 +2,7 @@ package pl.project13.scala.akka.raft.protocol
 
 import akka.actor.ActorRef
 import pl.project13.scala.akka.raft.model.Term
+import pl.project13.scala.akka.raft.protocol.RaftStates.RaftState
 
 trait InternalProtocol {
 
@@ -30,9 +31,13 @@ trait InternalProtocol {
   case object SendHeartbeat extends LeaderMessage
 
   // internal cluster related messages
-  sealed abstract class MembersChanged
+  sealed abstract class MembersChanged extends Message[Internal]
   case class MemberAdded(member: ActorRef) extends MembersChanged
   case class MemberRemoved(member: ActorRef) extends MembersChanged
+
+  // todo handle this smarter?
+  case object AskForState extends Message[Internal]
+  case class IAmInState(s: RaftState) extends Message[Internal]
 }
 
 object InternalProtocol extends InternalProtocol

@@ -7,6 +7,7 @@ import org.scalatest.concurrent.Eventually
 import org.scalatest.time.{Millis, Span}
 import pl.project13.scala.akka.raft.example.{AppendWord, WordConcatRaftActor}
 import pl.project13.scala.akka.raft.model.{Entry, Term}
+import pl.project13.scala.akka.raft.protocol.RaftStates.{Follower, Candidate}
 
 class CandidateTest extends RaftSpec with BeforeAndAfterEach
   with Eventually

@@ -10,12 +10,18 @@ import akka.cluster.Cluster
 import akka.actor.Props
 import pl.project13.scala.akka.raft.example.cluster.WordConcatClusterRaftActor
 import pl.project13.scala.akka.raft.example.AppendWord
+import scala.concurrent.Await
+import pl.project13.scala.akka.raft.protocol.InternalProtocol.{IAmInState, AskForState}
+import pl.project13.scala.akka.raft.protocol.RaftStates
+import pl.project13.scala.akka.raft.protocol.RaftStates.Leader
 
 object RaftClusterConfig extends MultiNodeConfig {
   val first = role("first")
   val second = role("second")
   val third = role("third")
 
+  val nodes = first :: second :: third :: Nil
+  
   commonConfig(
     ConfigFactory.parseResources("cluster.conf")
       .withFallback(ConfigFactory.load())
@@ -42,8 +48,10 @@ abstract class ClusterElectionSpec extends MultiNodeSpec(RaftClusterConfig)
 
     Cluster(system) join firstAddress
 
-    val members = (1 to initialParticipants) map { n =>
-      system.actorOf(Props[WordConcatClusterRaftActor], s"member-$n")
+    (0 until initialParticipants) map { idx =>
+      runOn(nodes(idx)) {
+        system.actorOf(Props[WordConcatClusterRaftActor], s"member-$idx")
+      }
     }
 
     receiveN(3).collect { case MemberUp(m) => m.address }.toSet should be(
@@ -54,9 +62,25 @@ abstract class ClusterElectionSpec extends MultiNodeSpec(RaftClusterConfig)
 
     testConductor.enter("all-up")
 
+    val member1 = Await.result(system.actorSelection("/user/member-1").resolveOne(1.second), atMost = 1.second)
+    val member2 = Await.result(system.actorSelection("/user/member-2").resolveOne(1.second), atMost = 1.second)
+    val member3 = Await.result(system.actorSelection("/user/member-3").resolveOne(1.second), atMost = 1.second)
+
     Thread.sleep(5000)
 
-    members(0) ! AppendWord("I")
+    member1 ! AskForState
+    member2 ! AskForState
+    member3 ! AskForState
+
+    fishForMessage(5.seconds) {
+      case IAmInState(Leader) =>
+        info("Leader was elected!")
+        true
+      case other =>
+        info("Got message: " + other)
+        false
+    }
+
   }
 
 }

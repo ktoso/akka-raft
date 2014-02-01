@@ -2,7 +2,6 @@ package pl.project13.scala.akka.raft.model
 
 import akka.testkit.TestProbe
 import scala.collection.immutable
-import pl.project13.scala.akka.raft.model.LogIndexMap
 import pl.project13.scala.akka.raft.RaftSpec
 
 class LogIndexMapTest extends RaftSpec {
