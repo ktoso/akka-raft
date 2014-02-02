@@ -13,8 +13,8 @@ private[raft] trait Candidate {
   val candidateBehavior: StateFunction = {
     // election
     case Event(BeginElection, m: ElectionMeta) =>
-      log.info("Tried to initialize election with no members...")
       if (m.members.isEmpty) {
+        log.info("Tried to initialize election with no members...")
         goto(Follower) using m.forFollower
       } else {
         log.info(s"Initializing election (among ${m.members.size} nodes) for ${m.currentTerm}")
