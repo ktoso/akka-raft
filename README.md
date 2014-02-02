@@ -19,3 +19,7 @@ License
 =======
 
 Apache 2.0
+
+
+[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/ktoso/akka-raft/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
+
