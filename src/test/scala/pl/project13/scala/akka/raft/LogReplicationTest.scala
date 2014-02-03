@@ -9,7 +9,7 @@ class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false) {
 
   behavior of "Log Replication"
 
-  val memberCount = 5
+  val initialMembers = 5
 
   val timeout = 2.second
 
@@ -50,13 +50,14 @@ class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false) {
     leader ! ClientMessage(client.ref, AppendWord("apples")) // 5
 
     // during this time it should not be able to respond...
-    Thread.sleep(300)
+    Thread.sleep(500)
     infoMemberStates()
 
     failingMembers foreach { restartMember(_) }
-    members foreach { leader ! RaftMemberAdded(_) }
+    leader ! ChangeConfiguration(RaftConfiguration(followers() ++ failingMembers)) // 6
+    Thread.sleep(500)
 
-    leader ! ClientMessage(client.ref, AppendWord("!"))      // 6
+    leader ! ClientMessage(client.ref, AppendWord("!"))      // 7
 
     // then
     // after all nodes came online again, raft should have been able to commit the messages!

@@ -7,7 +7,6 @@ import concurrent.duration._
 import scala.collection.immutable
 import pl.project13.scala.akka.raft.example.WordConcatRaftActor
 import pl.project13.scala.akka.raft.model.{Entry, Term}
-import pl.project13.scala.akka.raft.protocol.RaftStates.{Candidate, Follower}
 
 class FollowerTest extends RaftSpec with BeforeAndAfterEach
   with ImplicitSender {
@@ -18,14 +17,14 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
 
   var data: Meta = _
   
-  val memberCount = 0
+  val initialMembers = 0
 
   override def beforeEach() {
     super.beforeEach()
     data = Meta.initial(follower)
       .copy(
         currentTerm = Term(2),
-        members = Set(self)
+        config = RaftConfiguration(self)
       )
   }
 
@@ -80,7 +79,7 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
     data = Meta.initial(follower)
       .copy(
         currentTerm = Term(0),
-        members = Set(self)
+        config = RaftConfiguration(self)
       )
     follower.setState(Follower, data)
 

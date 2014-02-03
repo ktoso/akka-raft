@@ -2,7 +2,10 @@ package pl.project13.scala.akka.raft.protocol
 
 import akka.actor.ActorRef
 import pl.project13.scala.akka.raft.model.Term
+import pl.project13.scala.akka.raft.RaftConfiguration
 
+// todo simplify maybe, 1 metadata class would be enough I guess
+@SerialVersionUID(1L)
 private[protocol] trait StateMetadata extends Serializable {
 
   type Candidate = ActorRef
@@ -12,15 +15,14 @@ private[protocol] trait StateMetadata extends Serializable {
     def votes: Map[Term, Candidate]
     def currentTerm: Term
 
-//    def commitIndex: Int
-    def lastAppliedIndex: Int
+    def config: RaftConfiguration
+    def isConfigTransitionInProgress = config.isTransitioning
 
-    def members: Set[ActorRef]
-    val others = members filterNot { _ == self }
+    val others = config.members filterNot { _ == self }
 
 
     /** Since I'm the Leader "everyone but myself" */
-    def membersExceptSelf(implicit self: ActorRef) = members filterNot { _ == self}
+    def membersExceptSelf(implicit self: ActorRef) = config.members filterNot { _ == self}
 
     /** A member can only vote once during one Term */
     def canVoteIn(term: Term) = term >= currentTerm && votes.get(term).isEmpty
@@ -33,29 +35,31 @@ private[protocol] trait StateMetadata extends Serializable {
   case class Meta(
     self: ActorRef,
     currentTerm: Term,
-    lastAppliedIndex: Int,
-    members: Set[ActorRef], // todo think if Vector makes sense here?
+    config: RaftConfiguration,
     votes: Map[Term, Candidate]
   ) extends Metadata {
     
     // transition helpers
-    def forNewElection: ElectionMeta = ElectionMeta(self, currentTerm.next, lastAppliedIndex, 0, members, votes)
+    def forNewElection: ElectionMeta = ElectionMeta(self, currentTerm.next, 0, config, votes)
 
     def withVote(term: Term, candidate: ActorRef) = {
       copy(votes = votes updated (term, candidate))
     }
   }
 
+  object Meta {
+    def initial(implicit self: ActorRef) = new Meta(self, Term(0), RaftConfiguration(), Map.empty)
+  }
+
   case class ElectionMeta(
     self: ActorRef,
     currentTerm: Term,
-    lastAppliedIndex: Int,
     votesReceived: Int,
-    members: Set[ActorRef],
+    config: RaftConfiguration,
     votes: Map[Term, Candidate]
   ) extends Metadata {
 
-    def hasMajority = votesReceived > members.size / 2
+    def hasMajority = votesReceived > config.members.size / 2
 
     // transistion helpers
     def incVote = copy(votesReceived = votesReceived + 1)
@@ -63,24 +67,20 @@ private[protocol] trait StateMetadata extends Serializable {
 
     def withVoteFor(term: Term, candidate: ActorRef) = copy(votes = votes + (term -> candidate))
 
-    def forLeader: LeaderMeta        = LeaderMeta(self, currentTerm, lastAppliedIndex, members)
-    def forFollower: Meta            = Meta(self, currentTerm, lastAppliedIndex, members, Map.empty)
+    def forLeader: LeaderMeta        = LeaderMeta(self, currentTerm, config)
+    def forFollower: Meta            = Meta(self, currentTerm, config, Map.empty)
     def forNewElection: ElectionMeta = this.forFollower.forNewElection
   }
 
   case class LeaderMeta(
     self: ActorRef,
     currentTerm: Term,
-    lastAppliedIndex: Int,
-    members: Set[ActorRef]
+    config: RaftConfiguration
   ) extends Metadata {
 
     val votes = Map.empty[Term, Candidate]
 
-    def forFollower: Meta = Meta(self, currentTerm, lastAppliedIndex, members, Map.empty)
+    def forFollower: Meta = Meta(self, currentTerm, config, Map.empty)
   }
 
-  object Meta {
-    def initial(implicit self: ActorRef) = new Meta(self, Term(0), -1, Set.empty, Map.empty)
-  }
 }

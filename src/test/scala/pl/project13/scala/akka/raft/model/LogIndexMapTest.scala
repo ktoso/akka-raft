@@ -7,7 +7,7 @@ class LogIndexMapTest extends RaftSpec {
 
   behavior of "LogIndexMap"
 
-  def memberCount = 0
+  def initialMembers = 0
 
   "majority" should "find the index reached on the majority of members" in {
     // given

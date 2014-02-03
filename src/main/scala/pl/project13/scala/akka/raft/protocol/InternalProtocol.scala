@@ -1,8 +1,6 @@
 package pl.project13.scala.akka.raft.protocol
 
-import akka.actor.ActorRef
 import pl.project13.scala.akka.raft.model.Term
-import pl.project13.scala.akka.raft.protocol.RaftStates.RaftState
 
 private[protocol] trait InternalProtocol extends Serializable {
 
@@ -30,9 +28,12 @@ private[protocol] trait InternalProtocol extends Serializable {
 
   case object SendHeartbeat extends LeaderMessage
 
-  // internal cluster related messages
-  sealed abstract class RaftMembershipMessage extends Message[Internal]
-  case class RaftMemberAdded(member: ActorRef) extends RaftMembershipMessage
-  case class RaftMemberRemoved(member: ActorRef) extends RaftMembershipMessage
-}
+  // cluster membership change internal messages
 
+//  case object CommittedJointConfiguration extends LeaderMessage
+//  /**
+//   * Allows the Leader to drop maintaining the [[pl.project13.scala.akka.raft.JointConsensusRaftConfiguration]],
+//   * and stay() using only the new configuration. Marks the end of a configuration transition.
+//   */
+//  case object CommittedNewConfiguration extends LeaderMessage
+}

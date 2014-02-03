@@ -4,7 +4,6 @@ import pl.project13.scala.akka.raft.protocol._
 import org.scalatest.concurrent.Eventually
 import scala.concurrent.duration._
 import org.scalatest.time.{Millis, Span}
-import pl.project13.scala.akka.raft.protocol.RaftStates.{Leader, Candidate, Follower}
 
 class LeaderElectionTest extends RaftSpec(callingThreadDispatcher = false)
   with Eventually {
@@ -13,7 +12,7 @@ class LeaderElectionTest extends RaftSpec(callingThreadDispatcher = false)
 
   override implicit val patienceConfig = PatienceConfig(timeout = scaled(Span(500, Millis)), interval = scaled(Span(100, Millis)))
 
-  val memberCount = 5
+  val initialMembers = 5
 
   // note: these run sequential, so when the 2 test runs, we already have a leader,
   // so we can kill it, and see it the cluster re-elects a new one properly

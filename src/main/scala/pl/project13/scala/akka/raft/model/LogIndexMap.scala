@@ -2,6 +2,7 @@ package pl.project13.scala.akka.raft.model
 
 import akka.actor.ActorRef
 import scala.collection.immutable
+import scala.annotation.tailrec
 
 /**
  * '''Mutable''' "member -> number" mapper.
@@ -10,7 +11,7 @@ import scala.collection.immutable
  * See: nextIndex[] and matchIndex[] in the Raft paper.
  *
  */
-case class LogIndexMap(private var backing: Map[ActorRef, Int]) {
+case class LogIndexMap private (private var backing: Map[ActorRef, Int], private val initializeWith: Int) {
 
   def decrementFor(member: ActorRef): Int = backing(member) match {
     case 0 => 0
@@ -40,7 +41,7 @@ case class LogIndexMap(private var backing: Map[ActorRef, Int]) {
 
   /** @param compare (old, new) => should put? */
   def putIf(member: ActorRef, compare: (Int, Int) => Boolean, value: Int): Int = {
-    val oldValue = backing(member)
+    val oldValue = valueFor(member)
 
     if (compare(oldValue, value)) {
       put(member, value)
@@ -59,13 +60,18 @@ case class LogIndexMap(private var backing: Map[ActorRef, Int]) {
       .sortBy(- _._2).head // sort by size
       ._1
   }
-
   
-  def valueFor(member: ActorRef): Int = backing(member)
+  @tailrec final def valueFor(member: ActorRef): Int = backing.get(member) match {
+    case None =>
+      backing = backing.updated(member, initializeWith)
+      valueFor(member)
+    case Some(value) =>
+      value
+  }
   
 }
 
 object LogIndexMap {
   def initialize(members: Set[ActorRef], initializeWith: Int) =
-    new LogIndexMap(Map(members.toList.map(_ -> initializeWith): _*))
+    new LogIndexMap(Map(members.toList.map(_ -> initializeWith): _*), initializeWith)
 }

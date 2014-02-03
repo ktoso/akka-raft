@@ -1,11 +1,11 @@
 package pl.project13.scala.akka.raft.cluster
 
+import pl.project13.scala.akka.raft.protocol._
 import org.scalatest.{BeforeAndAfterAll, Matchers, FlatSpecLike}
 import akka.remote.testkit.{MultiNodeConfig, MultiNodeSpec}
 import akka.util.Timeout
 import akka.actor.{Address, RootActorPath, ActorRef}
 import scala.concurrent.{Future, Await}
-import pl.project13.scala.akka.raft.protocol.RaftStates._
 import akka.pattern.ask
 import pl.project13.scala.akka.raft.cluster.ClusterProtocol.{AskForState, IAmInState}
 

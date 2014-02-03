@@ -2,8 +2,10 @@ package pl.project13.scala.akka.raft.model
 
 import org.scalatest._
 import pl.project13.scala.akka.raft.model._
+import pl.project13.scala.akka.raft.example.protocol.WordConcatProtocol
 
-class ReplicatedLogTest extends FlatSpec with Matchers {
+class ReplicatedLogTest extends FlatSpec with Matchers
+  with WordConcatProtocol {
 
   behavior of "ReplicatedLog"
 
@@ -57,6 +59,19 @@ class ReplicatedLogTest extends FlatSpec with Matchers {
 
     // then
     replicatedLog.entries.map(_.command).toList should equal (List("a", "b", "c"))
+  }
+
+  it should "append properly" in {
+    // given
+    var replicatedLog = ReplicatedLog.empty[Cmnd]
+    replicatedLog += Entry(AppendWord("I"), Term(1), 0)
+    replicatedLog += Entry(AppendWord("like"), Term(1), 1)
+    replicatedLog += Entry(AppendWord("bananas"), Term(1), 2)
+    replicatedLog += Entry(GetWords, Term(1), 3)
+
+    // when
+
+    // then
   }
 
   "comittedEntries" should "contain entries up until the last committed one" in {

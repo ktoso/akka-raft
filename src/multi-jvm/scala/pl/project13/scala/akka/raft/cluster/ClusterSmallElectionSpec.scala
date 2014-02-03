@@ -10,7 +10,6 @@
 //import akka.actor.{RootActorPath, Props}
 //import pl.project13.scala.akka.raft.example.cluster.WordConcatClusterRaftActor
 //import scala.concurrent.Await
-//import pl.project13.scala.akka.raft.protocol.RaftStates.{Follower, Candidate, Leader}
 //import pl.project13.scala.akka.raft.cluster.ClusterProtocol.{IAmInState, AskForState}
 //import akka.pattern.ask
 //import akka.util.Timeout

@@ -10,4 +10,7 @@ trait RaftStateMachine {
    * The result of this apply will be sent back to the original client, issuing the command to the Raft State Machine.
    */
   def apply(command: Command): Any
+
+  // API TO BE DEFINED
+  def snapshot(): Unit = ???
 }

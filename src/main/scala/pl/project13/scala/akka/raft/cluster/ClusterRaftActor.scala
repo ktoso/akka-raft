@@ -9,6 +9,7 @@ import pl.project13.scala.akka.raft.RaftActor
 import pl.project13.scala.akka.raft.protocol._
 import akka.util.Timeout
 import concurrent.duration._
+import pl.project13.scala.akka.raft.cluster.ClusterProtocol.{RaftMemberRemoved, RaftMemberAdded}
 
 /**
  * Akka cluster ready [[pl.project13.scala.akka.raft.RaftActor]].
@@ -48,12 +49,12 @@ trait ClusterRaftActor extends RaftActor {
 
     // members going away
     case UnreachableMember(member) =>
-      log.info("Member detected as unreachable: {}", member)
-      // todo remove from raft
+      log.info("Node detected as unreachable: {}", member)
+      // todo remove from raft ???
 
     case MemberRemoved(member, previousStatus) =>
       log.info("Member is Removed: {} after {}", member.address, previousStatus)
-      // todo remove from raft
+      // todo remove from raft ???
 
     case _: MemberEvent =>
       // ignore

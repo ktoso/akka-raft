@@ -50,6 +50,7 @@ object Dependencies {
       "com.typesafe.akka" %% "akka-testkit"            % akkaVersion % "test",
       "com.typesafe.akka" %% "akka-multi-node-testkit" % akkaVersion % "test",
 
+      "org.mockito"        % "mockito-core"   % "1.9.5"     % "test",
       "org.scalatest"     %% "scalatest"      % "2.0"       % "test"
     )
   }

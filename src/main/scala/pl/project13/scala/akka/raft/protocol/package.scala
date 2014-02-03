@@ -4,3 +4,4 @@ package object protocol extends Serializable
   with RaftProtocol
   with InternalProtocol
   with StateMetadata
+  with RaftStates

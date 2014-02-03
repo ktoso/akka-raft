@@ -7,7 +7,6 @@ import scala.concurrent.duration._
 import java.util.concurrent.TimeUnit
 import akka.fsm.hack.TestFSMRefHack
 import pl.project13.scala.akka.raft.example.WordConcatRaftActor
-import pl.project13.scala.akka.raft.protocol.RaftStates.{Candidate, Follower, Leader, RaftState}
 
 /**
  * @param callingThreadDispatcher if true, will run using one thread. Use this for FSM tests, otherwise set to false to
@@ -19,9 +18,9 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
   import protocol._
 
   // notice the EventStreamAllMessages, thanks to this we're able to wait for messages like "leader elected" etc.
-  private var _members: List[TestFSMRef[RaftState, Metadata, WordConcatRaftActor]] = _
+  private var _members: Vector[TestFSMRef[RaftState, Metadata, WordConcatRaftActor]] = Vector.empty
 
-  def memberCount: Int
+  def initialMembers: Int
 
   val config = system.settings.config
   val electionTimeoutMin = config.getDuration("akka.raft.election-timeout.min", TimeUnit.MILLISECONDS).millis
@@ -29,17 +28,15 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
 
   implicit var probe: TestProbe = _
 
+  var raftConfiguration: RaftConfiguration = _
+
   override def beforeAll() {
     super.beforeAll()
 
-    _members = (1 to memberCount).toList map { i =>
-      createActor(i)
-    }
+    (1 to initialMembers).toList foreach { i => createActor(i) }
 
-    for {
-      target    <- _members
-      tellAbout <- _members
-    } target ! RaftMemberAdded(tellAbout)
+    raftConfiguration = RaftConfiguration(_members)
+    _members foreach { _ ! ChangeConfiguration(raftConfiguration) }
   }
 
 
@@ -49,16 +46,20 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
    * > Use the CallingThreadDispatcher for FSM tests, such as [[pl.project13.scala.akka.raft.CandidateTest]]
    */
   def createActor(i: Int): TestFSMRef[RaftState, Metadata, WordConcatRaftActor] = {
-    if (callingThreadDispatcher)
-      TestFSMRef(
-        (new WordConcatRaftActor with EventStreamAllMessages).asInstanceOf[WordConcatRaftActor], // hack, bleh
-        name = s"member-$i"
-      )
-    else
-      TestFSMRefHack[RaftState, Metadata, WordConcatRaftActor](
-        Props(new WordConcatRaftActor with EventStreamAllMessages).withDispatcher("raft-dispatcher"),
-        name = s"member-$i"
-      )
+    val actor =
+      if (callingThreadDispatcher)
+        TestFSMRef(
+          (new WordConcatRaftActor with EventStreamAllMessages).asInstanceOf[WordConcatRaftActor], // hack, bleh
+          name = s"member-$i"
+        )
+      else
+        TestFSMRefHack[RaftState, Metadata, WordConcatRaftActor](
+          Props(new WordConcatRaftActor with EventStreamAllMessages).withDispatcher("raft-dispatcher"),
+          name = s"member-$i"
+        )
+
+    _members :+= actor
+    actor
   }
 
   override def beforeEach() {
@@ -72,15 +73,19 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
     super.afterEach()
   }
 
-  def maybeLeader() = members.find(_.stateName == Leader)
+  def maybeLeader() = members().find(_.stateName == Leader)
 
   def leader() = maybeLeader getOrElse {
     throw new RuntimeException("Unable to find leader!")
   }
 
-  def members() = _members.filterNot(_.isTerminated)
+  def members(includingTerminated: Boolean = false) = {
+    _members.filterNot(!includingTerminated && _.isTerminated)
+  }
 
   def followers() = _members.filter(m => m.stateName == Follower && !m.isTerminated)
+
+  def follower(name: String) = followers().find(_.path.elements.last == name).get
 
   def candidates() = _members.filter(m => m.stateName == Candidate && !m.isTerminated)
 
@@ -90,13 +95,13 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
   }
 
   def infoMemberStates() {
-    info(s"Members: ${members.map(simpleName).mkString(", ")}; Leader is: ${maybeLeader map simpleName}")
+    info(s"Members: ${members().map(simpleName).mkString(", ")}; Leader is: ${maybeLeader map simpleName}")
   }
 
   // cluster management
 
   def killLeader() = {
-    val leaderToStop = leader
+    val leaderToStop = leader()
     leaderToStop.stop()
     info(s"Killed leader: ${simpleName(leaderToStop)}")
     leaderToStop
