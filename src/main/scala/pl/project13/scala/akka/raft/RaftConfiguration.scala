@@ -38,7 +38,7 @@ case class StableRaftConfiguration(members: Set[ActorRef]) extends RaftConfigura
     JointConsensusRaftConfiguration(members, newConfiguration.members)
 
 
-  def isPartOfNewConfiguration(ref: ActorRef) = true
+  def isPartOfNewConfiguration(ref: ActorRef) = members contains ref
 
   def transitionToStable = this
 

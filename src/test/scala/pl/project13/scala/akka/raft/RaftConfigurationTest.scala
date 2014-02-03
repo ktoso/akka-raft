@@ -1,19 +1,24 @@
 package pl.project13.scala.akka.raft
 
-import org.scalatest.{Matchers, FlatSpec}
-import org.scalatest.mock.MockitoSugar
-import akka.actor.ActorRef
+import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
+import akka.actor.ActorSystem
+import akka.testkit.{TestProbe, TestKit}
 
-class RaftConfigurationTest extends FlatSpec with Matchers
-  with MockitoSugar {
+class RaftConfigurationTest extends TestKit(ActorSystem("config-test"))
+  with FlatSpecLike with Matchers
+  with BeforeAndAfterAll {
 
   behavior of "RaftConfiguration"
 
+  override def afterAll() {
+    shutdown(system)
+  }
+
   it should "should return all members (old / new) during transitioning to new config" in {
     // given
-    val ref1 = mock[ActorRef]
-    val ref2 = mock[ActorRef]
-    val ref3 = mock[ActorRef]
+    val ref1 = TestProbe().ref
+    val ref2 = TestProbe().ref
+    val ref3 = TestProbe().ref
 
     val config1 = RaftConfiguration(Set(ref1, ref2))
     val config2 = RaftConfiguration(Set(ref2, ref3))
@@ -27,9 +32,9 @@ class RaftConfigurationTest extends FlatSpec with Matchers
 
   it should "should return only new members when transitioning finished" in {
     // given
-    val ref1 = mock[ActorRef]
-    val ref2 = mock[ActorRef]
-    val ref3 = mock[ActorRef]
+    val ref1 = TestProbe().ref
+    val ref2 = TestProbe().ref
+    val ref3 = TestProbe().ref
 
     val config1 = RaftConfiguration(Set(ref1, ref2))
     val config2 = RaftConfiguration(Set(ref2, ref3))
@@ -38,14 +43,14 @@ class RaftConfigurationTest extends FlatSpec with Matchers
     val members = config1.transitionTo(config2).transitionToStable.members
 
     // then
-    members should equal (Set(ref2))
+    members should equal (Set(ref2, ref3))
   }
 
   it should "determine if given node will be still available in new config after transition" in {
     // given
-    val ref1 = mock[ActorRef]
-    val ref2 = mock[ActorRef]
-    val ref3 = mock[ActorRef]
+    val ref1 = TestProbe().ref
+    val ref2 = TestProbe().ref
+    val ref3 = TestProbe().ref
 
     val config1 = RaftConfiguration(Set(ref1, ref2))
     val config2 = RaftConfiguration(Set(ref2, ref3))
@@ -59,9 +64,9 @@ class RaftConfigurationTest extends FlatSpec with Matchers
 
   it should "always return true when ased if node will be available in new configuration, when no transition is running" in {
     // given
-    val ref1 = mock[ActorRef]
-    val ref2 = mock[ActorRef]
-    val ref3 = mock[ActorRef]
+    val ref1 = TestProbe().ref
+    val ref2 = TestProbe().ref
+    val ref3 = TestProbe().ref
 
     val config = RaftConfiguration(Set(ref1, ref2))
 
