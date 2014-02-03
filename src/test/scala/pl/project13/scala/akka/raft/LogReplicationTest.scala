@@ -38,33 +38,38 @@ class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false)
     info(s"Final replicated state machine state: $got")
   }
 
+
   it should "replicate the missing entries to Follower which was down for a while" in {
     // given
     infoMemberStates()
 
+    subscribeEntryComitted()
+
     // when
-    val failingMembers = followers().take(2)
-    val initialLeader =  leader
+    val failingMembers = followers().take(3)
+    val initialLeader = leader()
     initialLeader ! ChangeConfiguration(ClusterConfiguration(members().toSet -- failingMembers)) // 4, 5
-    Thread.sleep(2000)
-    info("Removing: " + failingMembers.map(simpleName))
+    failingMembers foreach killMember
+
+    awaitEntryComitted(5)
     infoMemberStates()
 
     initialLeader ! ClientMessage(client.ref, AppendWord("and"))    // 6
     initialLeader ! ClientMessage(client.ref, AppendWord("apples")) // 7
 
     // during this time it should not be able to respond...
-    failingMembers foreach { restartMember(_) }
-    Thread.sleep(1000)
+    val revivedMembers = failingMembers.take(2)
+    revivedMembers foreach restartMember
 
-    eventually {
-      initialLeader ! ChangeConfiguration(ClusterConfiguration(members() ++ failingMembers)) // 8, 9
-    }
+    val allMembers = members() ++ revivedMembers
+    // actualy only the leader, and the failingMembers care
+    allMembers foreach { _ ! ChangeConfiguration(ClusterConfiguration(allMembers)) } // 8, 9
 
-    Thread.sleep(2000)
+    awaitEntryComitted(9)
     infoMemberStates()
 
     initialLeader ! ClientMessage(client.ref, AppendWord("!"))      // 10
+    awaitEntryComitted(10)
 
     // then
     // after all nodes came online again, raft should have been able to commit the messages!

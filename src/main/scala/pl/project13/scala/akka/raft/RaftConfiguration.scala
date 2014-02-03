@@ -8,6 +8,8 @@ class RaftConfiguration private (config: Config) {
 
   val defaultAppendEntriesBatchSize = config.getInt("default-append-entries-batch-size")
 
+  val publishTestingEvents = config.getBoolean("publish-testing-events")
+
   val electionTimeoutMin = config.getDuration("election-timeout.min", TimeUnit.MILLISECONDS).millis
   val electionTimeoutMax = config.getDuration("election-timeout.max", TimeUnit.MILLISECONDS).millis
 

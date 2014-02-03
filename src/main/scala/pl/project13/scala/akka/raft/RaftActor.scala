@@ -17,7 +17,7 @@ abstract class RaftActor extends RaftStateMachine
 
   private val config = context.system.settings.config
 
-  private val raftConfig = RaftConfiguration(config)
+  protected val raftConfig = RaftConfiguration(config)
 
   private val ElectionTimeoutTimerName = "election-timer"
 
@@ -76,8 +76,9 @@ abstract class RaftActor extends RaftStateMachine
     case Event(ChangeConfiguration(newConfiguration), m: Metadata) =>
       val transitioningConfig = m.config transitionTo newConfiguration
 
-      log.info(s"Starting transition to new Configuration changed, " +
-        s"old [size: ${m.config.members.size}]: ${simpleNames(m.config.members)}, migrating to: $transitioningConfig")
+      log.info(s"Starting transition to new Configuration, " +
+        s"old [size: ${m.config.members.size}]: ${simpleNames(m.config.members)}, " +
+        s"migrating to [size: ${transitioningConfig.transitionToStable.members.size}]: $transitioningConfig")
 
       // configuration change goes over the same process as log appending
       // here we initiate the 1st phase - committing the "joint consensus config", which includes all nodes from these configs

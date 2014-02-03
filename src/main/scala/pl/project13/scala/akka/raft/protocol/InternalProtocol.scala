@@ -28,12 +28,7 @@ private[protocol] trait InternalProtocol extends Serializable {
 
   case object SendHeartbeat extends LeaderMessage
 
-  // cluster membership change internal messages
-
-//  case object CommittedJointConfiguration extends LeaderMessage
-//  /**
-//   * Allows the Leader to drop maintaining the [[pl.project13.scala.akka.raft.JointConsensusRaftConfiguration]],
-//   * and stay() using only the new configuration. Marks the end of a configuration transition.
-//   */
-//  case object CommittedNewConfiguration extends LeaderMessage
+  // ----    testing and monitoring messages     ----
+  case class EntryCommitted(idx: Int) extends Message[Testing]
+  // ---- end of testing and monitoring messages ----
 }

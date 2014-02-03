@@ -4,5 +4,6 @@ package pl.project13.scala.akka.raft.protocol
 class Message[T <: MessageType]
 
 sealed trait MessageType
-final class Internal extends MessageType
-final class Raft     extends MessageType
+              class Raft     extends MessageType
+private[raft] class Internal extends MessageType
+private[raft] class Testing  extends Internal

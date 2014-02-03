@@ -10,6 +10,8 @@ import scala.annotation.tailrec
 
 private[raft] trait Leader {
   this: RaftActor =>
+  
+  protected def raftConfig: RaftConfiguration
 
   private val HeartbeatTimerName = "heartbeat-timer"
 
@@ -36,6 +38,7 @@ private[raft] trait Leader {
 
       log.info(s"adding to log: $entry")
       replicatedLog += entry
+      matchIndex.put(self, entry.index)
       log.info(s"log status = $replicatedLog")
 
       val meta = maybeUpdateConfiguration(m, entry.command)
@@ -130,7 +133,6 @@ private[raft] trait Leader {
   }
 
   def registerAppendSuccessful(member: ActorRef, msg: AppendSuccessful, m: LeaderMeta) = {
-    log.info(s"Follower ${follower()} accepted write")
     val AppendSuccessful(followerTerm, followerIndex) = msg
 
     log.info(s"Follower ${follower()} took write in term: $followerTerm, index: ${nextIndex.valueFor(follower())}")
@@ -144,7 +146,6 @@ private[raft] trait Leader {
     stay()
   }
 
-  // todo make replicated log party of meta, then we'll have less trouble here
   def maybeCommitEntry(m: LeaderMeta, matchIndex: LogIndexMap, replicatedLog: ReplicatedLog[Command]): ReplicatedLog[Command] = {
     val indexOnMajority = matchIndex.consensusForIndex(m.config)
     val willCommit = indexOnMajority > replicatedLog.committedIndex
@@ -152,9 +153,14 @@ private[raft] trait Leader {
 
     if (willCommit) {
       val entries = replicatedLog.between(replicatedLog.committedIndex, indexOnMajority)
-
+      
       entries foreach { entry =>
         handleCommitIfSpecialEntry.applyOrElse(entry, default = handleNormalEntry)
+
+        if (raftConfig.publishTestingEvents) {
+          log.info(s"Publishing EntryCommitted(${entry.index})")
+          context.system.eventStream.publish(EntryCommitted(entry.index))
+        }
       }
 
       replicatedLog.commit(indexOnMajority)
@@ -193,7 +199,7 @@ private[raft] trait Leader {
    */
   // todo duplication, see Follower!!!
   def maybeUpdateConfiguration(meta: LeaderMeta, entry: Command): LeaderMeta = entry match {
-    case newConfig: ClusterConfiguration =>
+    case newConfig: ClusterConfiguration if newConfig.isNewerThan(meta.config) =>
       log.info("Appended new configuration, will start using it now: {}", newConfig)
       meta.withConfig(newConfig)
 

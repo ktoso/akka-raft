@@ -5,6 +5,12 @@ import akka.actor.ActorRef
 sealed trait ClusterConfiguration {
   def members: Set[ActorRef]
 
+  def sequenceNumber: Long
+
+  def isOlderThan(that: ClusterConfiguration) = this.sequenceNumber <= that.sequenceNumber
+
+  def isNewerThan(that: ClusterConfiguration) = this.sequenceNumber > that.sequenceNumber
+
   def isTransitioning: Boolean
 
   def transitionTo(newConfiguration: ClusterConfiguration): ClusterConfiguration
@@ -25,27 +31,31 @@ sealed trait ClusterConfiguration {
 
 object ClusterConfiguration {
   def apply(members: Iterable[ActorRef]): ClusterConfiguration =
-    StableClusterConfiguration(members.toSet)
+    StableClusterConfiguration(0, members.toSet)
 
   def apply(members: ActorRef*): ClusterConfiguration =
-    StableClusterConfiguration(members.toSet)
+    StableClusterConfiguration(0, members.toSet)
 }
 
 /**
  * Used for times when the cluster is NOT undergoing membership changes.
  * Use `transitionTo` in order to enter a [[pl.project13.scala.akka.raft.JointConsensusClusterConfiguration]] state.
  */
-case class StableClusterConfiguration(members: Set[ActorRef]) extends ClusterConfiguration {
+case class StableClusterConfiguration(sequenceNumber: Long, members: Set[ActorRef]) extends ClusterConfiguration {
   val isTransitioning = false
 
-  def transitionTo(newConfiguration: ClusterConfiguration) =
-    JointConsensusClusterConfiguration(members, newConfiguration.members)
+  /**
+   * Implementation detail: The resulting configurations `sequenceNumber` will be equal to the current one.
+   */
+  def transitionTo(newConfiguration: ClusterConfiguration): JointConsensusClusterConfiguration =
+    JointConsensusClusterConfiguration(sequenceNumber, members, newConfiguration.members)
 
   def isPartOfNewConfiguration(ref: ActorRef) = members contains ref
 
   def transitionToStable = this
 
   override def toString = s"StableRaftConfiguration(${members.map(_.path.elements.last)})"
+
 }
 
 /**
@@ -60,7 +70,7 @@ case class StableClusterConfiguration(members: Set[ActorRef]) extends ClusterCon
  *
  * @todo make it possible to enqueue multiple configuration changes and apply them in order
  */
-case class JointConsensusClusterConfiguration(oldMembers: Set[ActorRef], newMembers: Set[ActorRef]) extends ClusterConfiguration {
+case class JointConsensusClusterConfiguration(sequenceNumber: Long, oldMembers: Set[ActorRef], newMembers: Set[ActorRef]) extends ClusterConfiguration {
 
   /** Members from both configurations participate in the joint consensus phase */
   val members = oldMembers union newMembers
@@ -68,6 +78,9 @@ case class JointConsensusClusterConfiguration(oldMembers: Set[ActorRef], newMemb
   val isTransitioning = true
 
   // todo maybe handle this with enqueueing this config change?
+  /**
+   * Implementation detail: The resulting stable configurations `sequenceNumber` will be incremented from the current one, to mark the following "stable phase".
+   */
   def transitionTo(newConfiguration: ClusterConfiguration) =
     throw new IllegalStateException(s"Cannot start another configuration transition, already in progress! " +
       s"Migrating from [${oldMembers.size}] $oldMembers to [${newMembers.size}] $newMembers")
@@ -75,8 +88,8 @@ case class JointConsensusClusterConfiguration(oldMembers: Set[ActorRef], newMemb
   /** When in the middle of a configuration migration we may need to know if we're part of the new config (in order to step down if not) */
   def isPartOfNewConfiguration(member: ActorRef): Boolean = newMembers contains member
 
-  def transitionToStable = StableClusterConfiguration(newMembers)
+  def transitionToStable = StableClusterConfiguration(sequenceNumber + 1, newMembers)
 
   override def toString =
-    s"JointConsensusRaftConfiguration(old:${oldMembers.map(_.path.elements.last)}, new:${newMembers.map(_.path.elements.last)}})"
+    s"JointConsensusRaftConfiguration(old:${oldMembers.map(_.path.elements.last)}, new:${newMembers.map(_.path.elements.last)})"
 }

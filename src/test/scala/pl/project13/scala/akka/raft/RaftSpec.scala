@@ -1,7 +1,7 @@
 package pl.project13.scala.akka.raft
 
 import org.scalatest._
-import akka.testkit.{TestProbe, TestFSMRef, TestKit}
+import akka.testkit.{ImplicitSender, TestProbe, TestFSMRef, TestKit}
 import akka.actor._
 import scala.concurrent.duration._
 import java.util.concurrent.TimeUnit
@@ -13,6 +13,7 @@ import pl.project13.scala.akka.raft.example.WordConcatRaftActor
  *                                enable a "really threading" dispatcher (see config for `raft-dispatcher`).
  */
 abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit(ActorSystem("raft-test"))
+  with ImplicitSender
   with FlatSpecLike with Matchers with BeforeAndAfterAll with BeforeAndAfterEach {
 
   import protocol._
@@ -33,7 +34,7 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
   override def beforeAll() {
     super.beforeAll()
 
-    (1 to initialMembers).toList foreach { i => createActor(i) }
+    (1 to initialMembers).toList foreach { i => createActor(s"member-$i") }
 
     raftConfiguration = ClusterConfiguration(_members)
     _members foreach { _ ! ChangeConfiguration(raftConfiguration) }
@@ -45,17 +46,17 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
    * > Use the "real" one for feature tests, so actors won't block each other in the CallingThread.
    * > Use the CallingThreadDispatcher for FSM tests, such as [[pl.project13.scala.akka.raft.CandidateTest]]
    */
-  def createActor(i: Int): TestFSMRef[RaftState, Metadata, WordConcatRaftActor] = {
+  def createActor(name: String): TestFSMRef[RaftState, Metadata, WordConcatRaftActor] = {
     val actor =
       if (callingThreadDispatcher)
         TestFSMRef(
           (new WordConcatRaftActor with EventStreamAllMessages).asInstanceOf[WordConcatRaftActor], // hack, bleh
-          name = s"member-$i"
+          name = name
         )
       else
         TestFSMRefHack[RaftState, Metadata, WordConcatRaftActor](
           Props(new WordConcatRaftActor with EventStreamAllMessages).withDispatcher("raft-dispatcher"),
-          name = s"member-$i"
+          name = name
         )
 
     _members :+= actor
@@ -95,7 +96,7 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
   }
 
   def infoMemberStates() {
-    info(s"Members: ${members().map(simpleName).mkString(", ")}; Leader is: ${maybeLeader map simpleName}")
+    info(s"Members: ${members().map(m => s"""${simpleName(m)}[${m.stateName}]""").mkString(", ")}")
   }
 
   // cluster management
@@ -107,17 +108,18 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
     leaderToStop
   }
 
-  def suspendMember(member: TestFSMRef[_, _, _]) = {
-    member.suspend()
+  def killMember(member: TestFSMRef[RaftState, Metadata, WordConcatRaftActor]) = {
+    system stop member
+    _members = _members filterNot { _ == member }
     info(s"Killed member: ${simpleName(member)}")
     Thread.sleep(10)
 
     member
   }
 
-  def restartMember(member: TestFSMRef[_, _, _]) = {
-    member.restart(new Throwable)
-    info(s"Restarted member: ${simpleName(member)}")
+  def restartMember(member: TestFSMRef[RaftState, Metadata, WordConcatRaftActor]) = {
+    createActor(member.path.elements.last)
+    info(s"Started member: ${simpleName(member)}")
     Thread.sleep(10)
 
     member
@@ -128,14 +130,30 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
   def subscribeElectedLeader()(implicit probe: TestProbe): Unit =
     system.eventStream.subscribe(probe.ref, classOf[ElectedAsLeader])
 
-  def awaitElectedLeader()(implicit probe: TestProbe): Unit =
-    probe.expectMsgClass(max = 3.seconds, classOf[ElectedAsLeader])
+  def awaitElectedLeader(max: FiniteDuration = 5.seconds)(implicit probe: TestProbe): Unit =
+    probe.expectMsgClass(max, classOf[ElectedAsLeader])
 
   def subscribeBeginElection()(implicit probe: TestProbe): Unit =
     system.eventStream.subscribe(probe.ref, BeginElection.getClass)
 
-  def awaitBeginElection()(implicit probe: TestProbe): Unit =
-    probe.expectMsgClass(max = 3.seconds, BeginElection.getClass)
+  def awaitBeginElection(max: FiniteDuration = 5.seconds)(implicit probe: TestProbe): Unit =
+    probe.expectMsgClass(max, BeginElection.getClass)
+
+  def subscribeEntryComitted()(implicit probe: TestProbe): Unit =
+    system.eventStream.subscribe(probe.ref, classOf[EntryCommitted])
+
+  def awaitEntryComitted(Index: Int, max: FiniteDuration = 5.seconds)(implicit probe: TestProbe): Unit = {
+    val start = System.currentTimeMillis()
+    probe.fishForMessage(max, hint = s"EntryCommitted($Index)") {
+      case EntryCommitted(Index) =>
+        info(s"Finished fishing for EntryCommitted($Index), took ${System.currentTimeMillis() - start}ms")
+        true
+
+      case other =>
+        info(s"Fished $other, still waiting for ${EntryCommitted(Index)}...")
+        false
+    }
+  }
 
   // end of await stuff ------------------------------------------------------------------------------------------------
 

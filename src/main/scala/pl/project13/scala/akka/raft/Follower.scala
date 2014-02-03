@@ -10,6 +10,8 @@ import scala.annotation.tailrec
 private[raft] trait Follower {
   this: RaftActor =>
 
+  protected def raftConfig: RaftConfiguration
+
   val followerBehavior: StateFunction = {
 
     // election
@@ -81,12 +83,9 @@ private[raft] trait Follower {
     val atIndex = entries.map(_.index).min
     log.debug("log before append: " + replicatedLog.entries)
     log.debug(bold("executing: " + s"replicatedLog = replicatedLog.append($entries, $atIndex)"))
-    log.info("lastIndex (from)  === " + replicatedLog.entries.map(_.index))
 
     replicatedLog = replicatedLog.append(entries, atIndex)
-    log.info("lastIndex (after)  === " + replicatedLog.entries.map(_.index))
     log.debug("log after append: " + replicatedLog.entries)
-    log.debug(s"AppendSuccessful(replicatedLog.lastTerm, replicatedLog.lastIndex) === AppendSuccessful(${replicatedLog.lastTerm}, ${replicatedLog.lastIndex})")
     AppendSuccessful(replicatedLog.lastTerm, replicatedLog.lastIndex)
   }
 
@@ -99,8 +98,8 @@ private[raft] trait Follower {
     case Nil =>
       meta
 
-    case (newConfig: ClusterConfiguration) :: moreEntries =>
-      log.info("Appended new configuration, will start using it now: {}", newConfig)
+    case (newConfig: ClusterConfiguration) :: moreEntries if newConfig.isNewerThan(meta.config) =>
+      log.info("Appended new configuration (seq: {}), will start using it now: {}", newConfig.sequenceNumber, newConfig)
       maybeUpdateConfiguration(meta.withConfig(newConfig), moreEntries)
 
     case _ :: moreEntries =>

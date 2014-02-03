@@ -62,7 +62,7 @@ class LeaderTest extends TestKit(ActorSystem("test-system")) with FlatSpecLike w
     leader ! RequestConfiguration
 
     // then
-    expectMsg(ChangeConfiguration(StableClusterConfiguration(Set(leader))))
+    expectMsg(ChangeConfiguration(StableClusterConfiguration(0, Set(leader))))
   }
 
 }

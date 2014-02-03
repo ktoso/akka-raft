@@ -8,6 +8,8 @@ import cluster.ClusterProtocol.{IAmInState, AskForState}
 private[raft] trait Candidate {
   this: RaftActor =>
 
+  protected def raftConfig: RaftConfiguration
+
   val candidateBehavior: StateFunction = {
     // election
     case Event(BeginElection, m: ElectionMeta) =>
@@ -25,9 +27,8 @@ private[raft] trait Candidate {
       }
 
     case Event(msg: RequestVote, m: ElectionMeta) if m.canVoteIn(msg.term) =>
-      log.info(s"term >= currentTerm && votes.get(term).isEmpty == ${msg.term} >= ${m.currentTerm} && ${m.votes.get(msg.term).isEmpty}")
       sender ! Vote(m.currentTerm)
-      stay() using m.withVoteFor(msg.term, candidate)
+      stay() using m.withVoteFor(msg.term, candidate())
 
     case Event(msg: RequestVote, m: ElectionMeta) =>
       sender ! Reject(msg.term)
@@ -37,23 +38,30 @@ private[raft] trait Candidate {
       val includingThisVote = m.incVote
 
       if (includingThisVote.hasMajority) {
-        log.info(s"Received vote by $voter; Won election with ${includingThisVote.votesReceived} of ${m.config.members.size} votes")
+        log.info(s"Received vote by ${voter()}; Won election with ${includingThisVote.votesReceived} of ${m.config.members.size} votes")
         goto(Leader) using m.forLeader
       } else {
-        log.info(s"Received vote by $voter; Have ${includingThisVote.votesReceived} of ${m.config.members.size} votes")
+        log.info(s"Received vote by ${voter()}; Have ${includingThisVote.votesReceived} of ${m.config.members.size} votes")
         stay() using includingThisVote
       }
 
     case Event(Reject(term), m: ElectionMeta) =>
-      log.info(s"Rejected vote by $voter, in $term")
+      log.info(s"Rejected vote by ${voter()}, in $term")
       stay()
 
     // end of election
 
-    case Event(append: AppendEntries[Entry[Command]], m: ElectionMeta) if append.term >= m.currentTerm =>
-      log.info("Reverting to Follower, because got AppendEntries from Leader in {}, but am in {}", append.term, m.currentTerm)
-      self.tell(append, sender())
-      goto(Follower) using m.forFollower
+    // handle appends
+    case Event(append: AppendEntries[Entry[Command]], m: ElectionMeta) =>
+      log.info("MAYBE Reverting to Follower, because got AppendEntries from Leader in {}, but am in {}", append.term, m.currentTerm)
+      val terms = append.term >= m.currentTerm
+
+      if (terms) {
+        self.tell(append, sender())
+        goto(Follower) using m.forFollower
+      } else {
+        stay()
+      }
 
     // ending election due to timeout
     case Event(ElectionTimeout(since), m: ElectionMeta) if m.config.members.size > 1 =>
