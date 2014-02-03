@@ -28,14 +28,14 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
 
   implicit var probe: TestProbe = _
 
-  var raftConfiguration: RaftConfiguration = _
+  var raftConfiguration: ClusterConfiguration = _
 
   override def beforeAll() {
     super.beforeAll()
 
     (1 to initialMembers).toList foreach { i => createActor(i) }
 
-    raftConfiguration = RaftConfiguration(_members)
+    raftConfiguration = ClusterConfiguration(_members)
     _members foreach { _ ! ChangeConfiguration(raftConfiguration) }
   }
 
@@ -76,7 +76,7 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
   def maybeLeader() = members().find(_.stateName == Leader)
 
   def leader() = maybeLeader getOrElse {
-    throw new RuntimeException("Unable to find leader!")
+    throw new RuntimeException("Unable to find leader! members: " + members(includingTerminated = true))
   }
 
   def members(includingTerminated: Boolean = false) = {

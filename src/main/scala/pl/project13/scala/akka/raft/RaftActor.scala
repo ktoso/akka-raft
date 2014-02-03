@@ -17,22 +17,22 @@ abstract class RaftActor extends RaftStateMachine
 
   private val config = context.system.settings.config
 
+  private val raftConfig = RaftConfiguration(config)
+
   private val ElectionTimeoutTimerName = "election-timer"
 
   // todo rethink if needed
   var electionTimeoutDieOn = 0L
 
   // todo or move to Meta
-  var replicatedLog = ReplicatedLog.empty[Command]
+  var replicatedLog = ReplicatedLog.empty[Command](raftConfig.defaultAppendEntriesBatchSize)
 
-  private val minElectionTimeout = config.getDuration("akka.raft.election-timeout.min", TimeUnit.MILLISECONDS).millis
-  private val maxElectionTimeout = config.getDuration("akka.raft.election-timeout.max", TimeUnit.MILLISECONDS).millis
+  val heartbeatInterval: FiniteDuration = raftConfig.heartbeatInterval
+
   def nextElectionTimeout: FiniteDuration = randomElectionTimeout(
-    from = minElectionTimeout,
-    to = maxElectionTimeout
+    from = raftConfig.electionTimeoutMin,
+    to = raftConfig.electionTimeoutMax
   )
-
-  val heartbeatInterval: FiniteDuration = config.getDuration("akka.raft.heartbeat-interval", TimeUnit.MILLISECONDS).millis
 
   // todo or move to Meta
   var nextIndex = LogIndexMap.initialize(Set.empty, replicatedLog.lastIndex)

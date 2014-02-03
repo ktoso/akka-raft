@@ -4,8 +4,10 @@ import pl.project13.scala.akka.raft.protocol._
 import concurrent.duration._
 import akka.testkit.TestProbe
 import pl.project13.scala.akka.raft.example.protocol._
+import org.scalatest.concurrent.Eventually
 
-class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false) {
+class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false)
+  with Eventually {
 
   behavior of "Log Replication"
 
@@ -27,12 +29,11 @@ class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false) {
     leader ! ClientMessage(client.ref, AppendWord("bananas")) // 2
     leader ! ClientMessage(client.ref, GetWords)              // 3
 
-    // probe will get the messages once they're confirmed by quorum
+    // then
     client.expectMsg(timeout, "I")
     client.expectMsg(timeout, "like")
     client.expectMsg(timeout, "bananas")
 
-    // then
     val got = client.expectMsg(timeout, List("I", "like", "bananas"))
     info(s"Final replicated state machine state: $got")
   }
@@ -42,28 +43,36 @@ class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false) {
     infoMemberStates()
 
     // when
-    val failingMembers = followers().take(3)
-
-    failingMembers foreach { suspendMember(_) }
-
-    leader ! ClientMessage(client.ref, AppendWord("and"))    // 4
-    leader ! ClientMessage(client.ref, AppendWord("apples")) // 5
-
-    // during this time it should not be able to respond...
-    Thread.sleep(500)
+    val failingMembers = followers().take(2)
+    val initialLeader =  leader
+    initialLeader ! ChangeConfiguration(ClusterConfiguration(members().toSet -- failingMembers)) // 4, 5
+    Thread.sleep(2000)
+    info("Removing: " + failingMembers.map(simpleName))
     infoMemberStates()
 
-    failingMembers foreach { restartMember(_) }
-    leader ! ChangeConfiguration(RaftConfiguration(followers() ++ failingMembers)) // 6
-    Thread.sleep(500)
+    initialLeader ! ClientMessage(client.ref, AppendWord("and"))    // 6
+    initialLeader ! ClientMessage(client.ref, AppendWord("apples")) // 7
 
-    leader ! ClientMessage(client.ref, AppendWord("!"))      // 7
+    // during this time it should not be able to respond...
+    failingMembers foreach { restartMember(_) }
+    Thread.sleep(1000)
+
+    eventually {
+      initialLeader ! ChangeConfiguration(ClusterConfiguration(members() ++ failingMembers)) // 8, 9
+    }
+
+    Thread.sleep(2000)
+    infoMemberStates()
+
+    initialLeader ! ClientMessage(client.ref, AppendWord("!"))      // 10
 
     // then
     // after all nodes came online again, raft should have been able to commit the messages!
-    client.expectMsg(timeout, "and")
-    client.expectMsg(timeout, "apples")
-    client.expectMsg(timeout, "!")
+    eventually {
+      client.expectMsg(timeout, "and")
+      client.expectMsg(timeout, "apples")
+      client.expectMsg(timeout, "!")
+    }
   }
 
 }

@@ -24,7 +24,7 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
     data = Meta.initial(follower)
       .copy(
         currentTerm = Term(2),
-        config = RaftConfiguration(self)
+        config = ClusterConfiguration(self)
       )
   }
 
@@ -79,7 +79,7 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
     data = Meta.initial(follower)
       .copy(
         currentTerm = Term(0),
-        config = RaftConfiguration(self)
+        config = ClusterConfiguration(self)
       )
     follower.setState(Follower, data)
 

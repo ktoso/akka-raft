@@ -20,6 +20,7 @@ class WordConcatRaftActor extends RaftActor {
       word
 
     case GetWords =>
+      log.info("Replying with {}", words.toList)
       words.toList
   }
 }

@@ -22,7 +22,7 @@ class LeaderTest extends TestKit(ActorSystem("test-system")) with FlatSpecLike w
     data = Meta.initial(leader)
       .copy(
         currentTerm = Term(1),
-        config = RaftConfiguration(leader)
+        config = ClusterConfiguration(leader)
       ).forNewElection.forLeader
   }
 
@@ -30,7 +30,7 @@ class LeaderTest extends TestKit(ActorSystem("test-system")) with FlatSpecLike w
     // given
     val probe1, probe2, probe3 = TestProbe().ref
 
-    data = data.copy(config = RaftConfiguration(probe1, probe2, probe3))
+    data = data.copy(config = ClusterConfiguration(probe1, probe2, probe3))
     leader.setState(Leader, data)
     val actor = leader.underlyingActor
 
@@ -45,8 +45,7 @@ class LeaderTest extends TestKit(ActorSystem("test-system")) with FlatSpecLike w
     replicatedLog += model.Entry(AppendWord("c"), Term(1), 3)
 
     // when
-    val (committedLog, data2) = actor.maybeCommitEntry(data, matchIndex, replicatedLog)
-    data = data2 // todo super ugly, fixme
+    val committedLog = actor.maybeCommitEntry(data, matchIndex, replicatedLog)
 
     // then
     actor.replicatedLog.committedIndex should equal (-1)
@@ -63,7 +62,7 @@ class LeaderTest extends TestKit(ActorSystem("test-system")) with FlatSpecLike w
     leader ! RequestConfiguration
 
     // then
-    expectMsg(ChangeConfiguration(StableRaftConfiguration(Set(leader))))
+    expectMsg(ChangeConfiguration(StableClusterConfiguration(Set(leader))))
   }
 
 }

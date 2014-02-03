@@ -5,6 +5,7 @@ import scala.collection.immutable
 import model._
 import protocol._
 import cluster.ClusterProtocol.{IAmInState, AskForState}
+import scala.annotation.tailrec
 
 private[raft] trait Follower {
   this: RaftActor =>
@@ -58,8 +59,10 @@ private[raft] trait Follower {
       log.info("Appending: " + msg.entries)
       leader ! append(msg.entries, m)
       replicatedLog = commitUntilLeadersIndex(m, msg)
-
-      stayAcceptingHeartbeat() using m.copy(currentTerm = replicatedLog.lastTerm)
+      
+      val meta = maybeUpdateConfiguration(m, msg.entries.map(_.command))
+      val metaWithUpdatedTerm = meta.copy(currentTerm = replicatedLog.lastTerm)
+      stayAcceptingHeartbeat() using metaWithUpdatedTerm 
     }
 //    } else {
 //      log.info("Rejecting write of (does not contain matching entry): " + msg + "; " + replicatedLog)
@@ -78,40 +81,56 @@ private[raft] trait Follower {
     val atIndex = entries.map(_.index).min
     log.debug("log before append: " + replicatedLog.entries)
     log.debug(bold("executing: " + s"replicatedLog = replicatedLog.append($entries, $atIndex)"))
-    replicatedLog = replicatedLog.append(entries, atIndex)
-    log.debug("log after append: " + replicatedLog.entries)
+    log.info("lastIndex (from)  === " + replicatedLog.entries.map(_.index))
 
+    replicatedLog = replicatedLog.append(entries, atIndex)
+    log.info("lastIndex (after)  === " + replicatedLog.entries.map(_.index))
+    log.debug("log after append: " + replicatedLog.entries)
+    log.debug(s"AppendSuccessful(replicatedLog.lastTerm, replicatedLog.lastIndex) === AppendSuccessful(${replicatedLog.lastTerm}, ${replicatedLog.lastIndex})")
     AppendSuccessful(replicatedLog.lastTerm, replicatedLog.lastIndex)
+  }
+
+  /**
+   * Configurations must be used by each node right away when they get appended to their logs (doesn't matter if not committed).
+   * This method updates the Meta object if a configuration change is discovered.
+   */
+  // todo duplication, see Leader!!!
+  @tailrec final def maybeUpdateConfiguration(meta: Meta, entries: Seq[Command]): Meta = entries match {
+    case Nil =>
+      meta
+
+    case (newConfig: ClusterConfiguration) :: moreEntries =>
+      log.info("Appended new configuration, will start using it now: {}", newConfig)
+      maybeUpdateConfiguration(meta.withConfig(newConfig), moreEntries)
+
+    case _ :: moreEntries =>
+      maybeUpdateConfiguration(meta, moreEntries)
   }
   
   def commitUntilLeadersIndex(m: Meta, msg: AppendEntries[Command]): ReplicatedLog[Command] = {
     val entries = replicatedLog.between(replicatedLog.committedIndex, msg.leaderCommitId)
 
-    val handleAsSpecial = handleCommitIfSpecialEntry(m)
-    val handleNormalEntry: PartialFunction[Any, Meta] = {
-      case entry: Entry[Command] =>
-        apply(entry.command)
-        m
-    }
-
     entries.foldLeft(replicatedLog) { case (repLog, entry) =>
       log.info(s"committing entry $entry on Follower, leader is committed until [${msg.leaderCommitId}]")
       log.info("entry = " + entry)
 
-      handleAsSpecial.applyOrElse(entry, handleNormalEntry)
+      handleCommitIfSpecialEntry.applyOrElse(entry, handleNormalEntry)
 
       repLog.commit(entry.index)
     }
   }
 
-  private def handleCommitIfSpecialEntry(m: Meta): PartialFunction[Any, Meta] = {
-    case Entry(jointConfig: JointConsensusRaftConfiguration, _, _, _) =>
-      log.info("JointConsensusRaftConfiguration committed, will use it until new Configuration committed. " + jointConfig)
-      m.copy(config = jointConfig)
+  private val handleNormalEntry: PartialFunction[Any, Unit] = {
+    case entry: Entry[Command] => apply(entry.command)
+  }
 
-    case Entry(stableConfig: StableRaftConfiguration, _, _, _) =>
-     log.info("StableRaftConfiguration committed, finishing phase of cluster membership change. " + stableConfig)
-      m.copy(config = stableConfig)
+  // todo rethink or remove? This is currently only used to NOT apply these messages onto the client state machine
+  private val handleCommitIfSpecialEntry: PartialFunction[Any, Unit] = {
+    case Entry(jointConfig: ClusterConfiguration, _, _, _) =>
+//      log.info("JointConsensusRaftConfiguration committed, will use it until new Configuration committed. " + jointConfig)
+
+//    case Entry(stableConfig: StableClusterConfiguration, _, _, _) =>
+//     log.info("StableRaftConfiguration committed, finishing phase of cluster membership change. " + stableConfig)
   }
 
   // todo remove me

@@ -27,7 +27,7 @@ class ClusterMembershipChangeTest extends RaftSpec(callingThreadDispatcher = fal
 
     // when
     val additionalActor = createActor(initialMembers + 1)
-    val newConfiguration = RaftConfiguration(raftConfiguration.members + additionalActor)
+    val newConfiguration = ClusterConfiguration(raftConfiguration.members + additionalActor)
 
     initialLeader ! ChangeConfiguration(newConfiguration)
 

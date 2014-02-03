@@ -3,7 +3,7 @@ package pl.project13.scala.akka.raft.protocol
 import akka.actor.ActorRef
 import scala.collection.immutable
 import pl.project13.scala.akka.raft.model.{Entry, ReplicatedLog, Term}
-import pl.project13.scala.akka.raft.RaftConfiguration
+import pl.project13.scala.akka.raft.ClusterConfiguration
 
 private[protocol] trait RaftProtocol extends Serializable {
   sealed trait RaftMessage extends Message[Raft]
@@ -56,7 +56,7 @@ private[protocol] trait RaftProtocol extends Serializable {
    *
    * For a detailed description see § 6 - Cluster Membership Changes, in the Raft whitepaper.
    */
-  case class ChangeConfiguration(newConf: RaftConfiguration) extends Message[Raft]
+  case class ChangeConfiguration(newConf: ClusterConfiguration) extends Message[Raft]
 
   /**
    * Message issued by freshly restarted actor after has crashed

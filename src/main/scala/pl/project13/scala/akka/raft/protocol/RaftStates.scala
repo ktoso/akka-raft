@@ -10,7 +10,7 @@ trait RaftStates {
 
   sealed trait RaftState
 
-  /** In this phase the member awaits to get it's [[pl.project13.scala.akka.raft.RaftConfiguration]] */
+  /** In this phase the member awaits to get it's [[pl.project13.scala.akka.raft.ClusterConfiguration]] */
   case object Init      extends RaftState
 
   /** A Follower can take writes from a Leader; If doesn't get any heartbeat, may decide to become a Candidate */

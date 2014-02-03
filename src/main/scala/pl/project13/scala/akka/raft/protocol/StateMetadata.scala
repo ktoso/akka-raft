@@ -2,7 +2,7 @@ package pl.project13.scala.akka.raft.protocol
 
 import akka.actor.ActorRef
 import pl.project13.scala.akka.raft.model.Term
-import pl.project13.scala.akka.raft.RaftConfiguration
+import pl.project13.scala.akka.raft.ClusterConfiguration
 
 // todo simplify maybe, 1 metadata class would be enough I guess
 @SerialVersionUID(1L)
@@ -15,7 +15,7 @@ private[protocol] trait StateMetadata extends Serializable {
     def votes: Map[Term, Candidate]
     def currentTerm: Term
 
-    def config: RaftConfiguration
+    def config: ClusterConfiguration
     def isConfigTransitionInProgress = config.isTransitioning
 
     val others = config.members filterNot { _ == self }
@@ -35,7 +35,7 @@ private[protocol] trait StateMetadata extends Serializable {
   case class Meta(
     self: ActorRef,
     currentTerm: Term,
-    config: RaftConfiguration,
+    config: ClusterConfiguration,
     votes: Map[Term, Candidate]
   ) extends Metadata {
     
@@ -45,17 +45,19 @@ private[protocol] trait StateMetadata extends Serializable {
     def withVote(term: Term, candidate: ActorRef) = {
       copy(votes = votes updated (term, candidate))
     }
+
+    def withConfig(conf: ClusterConfiguration): Meta = copy(config = conf)
   }
 
   object Meta {
-    def initial(implicit self: ActorRef) = new Meta(self, Term(0), RaftConfiguration(), Map.empty)
+    def initial(implicit self: ActorRef) = new Meta(self, Term(0), ClusterConfiguration(), Map.empty)
   }
 
   case class ElectionMeta(
     self: ActorRef,
     currentTerm: Term,
     votesReceived: Int,
-    config: RaftConfiguration,
+    config: ClusterConfiguration,
     votes: Map[Term, Candidate]
   ) extends Metadata {
 
@@ -75,10 +77,13 @@ private[protocol] trait StateMetadata extends Serializable {
   case class LeaderMeta(
     self: ActorRef,
     currentTerm: Term,
-    config: RaftConfiguration
+    config: ClusterConfiguration
   ) extends Metadata {
 
     val votes = Map.empty[Term, Candidate]
+
+    // todo duplication; yeah, having 3 meta classes was a bad idea. todo make one Meta class
+    def withConfig(conf: ClusterConfiguration): LeaderMeta = copy(config = conf)
 
     def forFollower: Meta = Meta(self, currentTerm, config, Map.empty)
   }

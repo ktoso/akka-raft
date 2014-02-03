@@ -3,6 +3,7 @@ package pl.project13.scala.akka.raft.model
 import akka.actor.ActorRef
 import scala.collection.immutable
 import scala.annotation.tailrec
+import pl.project13.scala.akka.raft.{StableClusterConfiguration, JointConsensusClusterConfiguration, ClusterConfiguration}
 
 /**
  * '''Mutable''' "member -> number" mapper.
@@ -51,14 +52,37 @@ case class LogIndexMap private (private var backing: Map[ActorRef, Int], private
     }
   }
 
+  def consensusForIndex(config: ClusterConfiguration): Int = config match {
+    case StableClusterConfiguration(members) =>
+      indexOnMajority(members)
+
+    case JointConsensusClusterConfiguration(oldMembers, newMembers) =>
+      // during joined consensus, in order to commit a value, consensus must be achieved on BOTH member sets.
+      // this guarantees safety once we switch to the new configuration, and oldMembers go away. More details in §6.
+      val oldQuorum = indexOnMajority(oldMembers)
+      val newQuorum = indexOnMajority(newMembers)
+//      math.min(oldQuorum, newQuorum)
+
+      if (oldQuorum == -1) newQuorum
+      else if (newQuorum == -1) oldQuorum
+      else math.min(oldQuorum, newQuorum)
+  }
+
   // todo make nicer...
-  def indexOnMajority = {
-    backing
+  private def indexOnMajority(include: Set[ActorRef]): Int = {
+    val indexCountPairs = backing
+      .filterKeys(include)
       .groupBy(_._2)
       .map { case (k, m) => k -> m.size }
       .toList
-      .sortBy(- _._2).head // sort by size
-      ._1
+
+    indexCountPairs match {
+      case Nil => -1
+      case _ =>
+        indexCountPairs.sortBy(- _._2).head // sort by size
+        ._1
+    }
+
   }
   
   @tailrec final def valueFor(member: ActorRef): Int = backing.get(member) match {

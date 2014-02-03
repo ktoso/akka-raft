@@ -6,6 +6,7 @@ import pl.project13.scala.akka.raft.cluster.ClusterProtocol.{IAmInState, AskForS
 
 import model._
 import protocol._
+import scala.annotation.tailrec
 
 private[raft] trait Leader {
   this: RaftActor =>
@@ -37,9 +38,13 @@ private[raft] trait Leader {
       replicatedLog += entry
       log.info(s"log status = $replicatedLog")
 
-      replicateLog(m)
+      val meta = maybeUpdateConfiguration(m, entry.command)
+      replicateLog(meta)
 
-      stay()
+      if (meta.config.isPartOfNewConfiguration(self))
+        stay() using meta
+      else
+        goto(Follower) using meta.forFollower // or maybe goto something else?
 
     case Event(AppendRejected(term, index), m: LeaderMeta) if term > m.currentTerm =>
       stopHeartbeat()
@@ -97,7 +102,7 @@ private[raft] trait Leader {
       log.info(s"""sending : ${AppendEntries(
               m.currentTerm,
               replicatedLog,
-              fromIndex = nextIndex.valueFor(member), // todo shouldnt we increase here?
+              fromIndex = nextIndex.valueFor(member),
               leaderCommitId = replicatedLog.committedIndex
             )} to $member""")
 
@@ -123,6 +128,7 @@ private[raft] trait Leader {
 
     stay()
   }
+
   def registerAppendSuccessful(member: ActorRef, msg: AppendSuccessful, m: LeaderMeta) = {
     log.info(s"Follower ${follower()} accepted write")
     val AppendSuccessful(followerTerm, followerIndex) = msg
@@ -130,46 +136,30 @@ private[raft] trait Leader {
     log.info(s"Follower ${follower()} took write in term: $followerTerm, index: ${nextIndex.valueFor(follower())}")
 
     // update our tables for this member
-    nextIndex.put(follower(), followerIndex + 1)
+    nextIndex.put(follower(), followerIndex)
     matchIndex.putIfGreater(follower(), nextIndex.valueFor(follower()))
 
-    // todo horrible api of maybeCommitEntry
-    val (repLog, meta) = maybeCommitEntry(m, matchIndex, replicatedLog)
-    replicatedLog = repLog
+    replicatedLog = maybeCommitEntry(m, matchIndex, replicatedLog)
 
-    stay() using meta
+    stay()
   }
 
   // todo make replicated log party of meta, then we'll have less trouble here
-  def maybeCommitEntry(m: LeaderMeta, matchIndex: LogIndexMap, replicatedLog: ReplicatedLog[Command]): (ReplicatedLog[Command], LeaderMeta) = {
-    var meta = m // might change
-
-    val indexOnMajority = matchIndex.indexOnMajority
+  def maybeCommitEntry(m: LeaderMeta, matchIndex: LogIndexMap, replicatedLog: ReplicatedLog[Command]): ReplicatedLog[Command] = {
+    val indexOnMajority = matchIndex.consensusForIndex(m.config)
     val willCommit = indexOnMajority > replicatedLog.committedIndex
-    log.info(s"Majority of members have index: $indexOnMajority persisted. (Comitted index: ${replicatedLog.committedIndex}, will commit now: $willCommit)")
-
-    // each commit may have caused the membership configuration to change for example
-    val handleNormalEntry: PartialFunction[Any, LeaderMeta] = {
-      case entry: Entry[Command] =>
-        log.info(s"Committing log at index: ${entry.index}; Applying command: ${entry.command}, will send result to client: ${entry.client}")
-        val result = apply(entry.command)
-        entry.client foreach { _ ! result }
-        meta
-    }
+    log.info(s"Consensus for persisted index: $indexOnMajority. (Comitted index: ${replicatedLog.committedIndex}, will commit now: $willCommit)")
 
     if (willCommit) {
       val entries = replicatedLog.between(replicatedLog.committedIndex, indexOnMajority)
-//      log.info(s"Before commit; indexOnMajority:$indexOnMajority, replicatedLog.committedIndex: ${replicatedLog.committedIndex} => entries = $entries")
 
       entries foreach { entry =>
-        // handle special || handle normal, explicit types because compiler paniced
-        val handleAsSpecial = handleCommitIfSpecialEntry(meta)
-        meta = handleAsSpecial.applyOrElse(entry, default = handleNormalEntry)
+        handleCommitIfSpecialEntry.applyOrElse(entry, default = handleNormalEntry)
       }
 
-      replicatedLog.commit(indexOnMajority) -> meta
+      replicatedLog.commit(indexOnMajority)
     } else {
-      replicatedLog -> m
+      replicatedLog
     }
   }
 
@@ -177,26 +167,38 @@ private[raft] trait Leader {
    * Used for handling special messages, such as ''new Configuration'' or a ''Snapshot entry'' being comitted.
    *
    * Note that special log entries will NOT be propagated to the client state machine.
-   *
-   * @todo this is quite hacky... because the message stored in the log is not `<: Cmnd`, this of a better way maybe?
    */
-  private def handleCommitIfSpecialEntry(m: LeaderMeta): PartialFunction[Entry[Command], LeaderMeta] = {
-    case Entry(jointConfig: JointConsensusRaftConfiguration, _, _, _) =>
-      log.info("JointConsensusRaftConfiguration committed on Leader, entering: {}, proceeding with trying to commit new config", jointConfig)
-
+  // todo rethink or remove? This is currently only used to NOT apply these messages onto the client state machine
+  private val handleCommitIfSpecialEntry: PartialFunction[Entry[Command], Unit] = {
+    case Entry(jointConfig: JointConsensusClusterConfiguration, _, _, _) =>
       self ! ClientMessage(self, jointConfig.transitionToStable) // will cause comitting of only "new" config
 
-      m.copy(config = jointConfig)
+    case Entry(stableConfig: StableClusterConfiguration, _, _, _) =>
+//      if (!stableConfig.isPartOfNewConfiguration(self)) {
+//        log.info("Committed new configuration, this member is not part of it - stopping self.")
+//        goto(Follower)
+//      }
+  }
 
-    case Entry(stableConfig: StableRaftConfiguration, _, _, _) =>
-      log.info("StableRaftConfiguration committed on Leader, finishing transition phase, stable with config: {}", stableConfig)
+  private val handleNormalEntry: PartialFunction[Any, Unit] = {
+    case entry: Entry[Command] =>
+      log.info(s"Committing log at index: ${entry.index}; Applying command: ${entry.command}, will send result to client: ${entry.client}")
+      val result = apply(entry.command)
+      entry.client foreach { _ ! result }
+  }
 
-      if (!stableConfig.isPartOfNewConfiguration(self)) {
-        log.info("Committed new configuration, this member is not part of it - stopping self.")
-        context stop self
-      }
+  /**
+   * Configurations must be used by each node right away when they get appended to their logs (doesn't matter if not committed).
+   * This method updates the Meta object if a configuration change is discovered.
+   */
+  // todo duplication, see Follower!!!
+  def maybeUpdateConfiguration(meta: LeaderMeta, entry: Command): LeaderMeta = entry match {
+    case newConfig: ClusterConfiguration =>
+      log.info("Appended new configuration, will start using it now: {}", newConfig)
+      meta.withConfig(newConfig)
 
-      m.copy(config = stableConfig)
+    case _ =>
+      meta
   }
 
   // todo remove me

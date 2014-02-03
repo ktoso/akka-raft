@@ -4,7 +4,7 @@ import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, Matchers}
 import akka.actor.ActorSystem
 import akka.testkit.{TestProbe, TestKit}
 
-class RaftConfigurationTest extends TestKit(ActorSystem("config-test"))
+class ClusterConfigurationTest extends TestKit(ActorSystem("config-test"))
   with FlatSpecLike with Matchers
   with BeforeAndAfterAll {
 
@@ -20,8 +20,8 @@ class RaftConfigurationTest extends TestKit(ActorSystem("config-test"))
     val ref2 = TestProbe().ref
     val ref3 = TestProbe().ref
 
-    val config1 = RaftConfiguration(Set(ref1, ref2))
-    val config2 = RaftConfiguration(Set(ref2, ref3))
+    val config1 = ClusterConfiguration(Set(ref1, ref2))
+    val config2 = ClusterConfiguration(Set(ref2, ref3))
 
     // when
     val members = config1.transitionTo(config2).members
@@ -36,13 +36,14 @@ class RaftConfigurationTest extends TestKit(ActorSystem("config-test"))
     val ref2 = TestProbe().ref
     val ref3 = TestProbe().ref
 
-    val config1 = RaftConfiguration(Set(ref1, ref2))
-    val config2 = RaftConfiguration(Set(ref2, ref3))
+    val config1 = ClusterConfiguration(Set(ref1, ref2))
+    val config2 = ClusterConfiguration(Set(ref2, ref3))
 
     // when
     val members = config1.transitionTo(config2).transitionToStable.members
 
     // then
+
     members should equal (Set(ref2, ref3))
   }
 
@@ -52,8 +53,8 @@ class RaftConfigurationTest extends TestKit(ActorSystem("config-test"))
     val ref2 = TestProbe().ref
     val ref3 = TestProbe().ref
 
-    val config1 = RaftConfiguration(Set(ref1, ref2))
-    val config2 = RaftConfiguration(Set(ref2, ref3))
+    val config1 = ClusterConfiguration(Set(ref1, ref2))
+    val config2 = ClusterConfiguration(Set(ref2, ref3))
 
     // when
     val members = config1.transitionTo(config2).transitionToStable.members
@@ -68,7 +69,7 @@ class RaftConfigurationTest extends TestKit(ActorSystem("config-test"))
     val ref2 = TestProbe().ref
     val ref3 = TestProbe().ref
 
-    val config = RaftConfiguration(Set(ref1, ref2))
+    val config = ClusterConfiguration(Set(ref1, ref2))
 
     // when
     config.isPartOfNewConfiguration(ref1) should equal (true)

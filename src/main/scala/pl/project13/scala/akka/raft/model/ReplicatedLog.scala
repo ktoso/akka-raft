@@ -3,10 +3,13 @@ package pl.project13.scala.akka.raft.model
 import akka.actor.ActorRef
 import scala.annotation.switch
 
-case class
-ReplicatedLog[Command](
+/**
+ * @param defaultBatchSize number of commands that can be sent together in one [[pl.project13.scala.akka.raft.protocol.RaftProtocol.AppendEntries]] message.
+ */
+case class ReplicatedLog[Command](
   entries: List[Entry[Command]],
-  committedIndex: Int
+  committedIndex: Int,
+  defaultBatchSize: Int
 ) {
 
   def commands = entries.map(_.command)
@@ -94,13 +97,13 @@ ReplicatedLog[Command](
   def notcommittedEntries = entries.slice(committedIndex + 1, entries.length)
 }
 
-class EmptyReplicatedLog[T] extends ReplicatedLog[T](List.empty, -1) {
+class EmptyReplicatedLog[T](defaultBatchSize: Int) extends ReplicatedLog[T](List.empty, -1, defaultBatchSize) {
   override def lastTerm = Term(0)
   override def lastIndex = 0
 }
 
 object ReplicatedLog {
-  def empty[T]: ReplicatedLog[T] = new EmptyReplicatedLog[T]
+  def empty[T](defaultBatchSize: Int): ReplicatedLog[T] = new EmptyReplicatedLog[T](defaultBatchSize)
 }
 
 case class Entry[T](
