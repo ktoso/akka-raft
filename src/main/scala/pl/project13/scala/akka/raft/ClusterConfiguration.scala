@@ -67,8 +67,6 @@ case class StableClusterConfiguration(sequenceNumber: Long, members: Set[ActorRe
  *  - Log entries are replicated to all members in both configurations
  *  - Any member from either configuration may serve as Leader
  *  - Agreement (for elections and entry commitment) requires majoritis from ''both'' old and new configurations
- *
- * @todo make it possible to enqueue multiple configuration changes and apply them in order
  */
 case class JointConsensusClusterConfiguration(sequenceNumber: Long, oldMembers: Set[ActorRef], newMembers: Set[ActorRef]) extends ClusterConfiguration {
 
@@ -77,7 +75,6 @@ case class JointConsensusClusterConfiguration(sequenceNumber: Long, oldMembers: 
 
   val isTransitioning = true
 
-  // todo maybe handle this with enqueueing this config change?
   /**
    * Implementation detail: The resulting stable configurations `sequenceNumber` will be incremented from the current one, to mark the following "stable phase".
    */

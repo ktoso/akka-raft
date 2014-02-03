@@ -174,16 +174,13 @@ private[raft] trait Leader {
    *
    * Note that special log entries will NOT be propagated to the client state machine.
    */
-  // todo rethink or remove? This is currently only used to NOT apply these messages onto the client state machine
   private val handleCommitIfSpecialEntry: PartialFunction[Entry[Command], Unit] = {
     case Entry(jointConfig: JointConsensusClusterConfiguration, _, _, _) =>
       self ! ClientMessage(self, jointConfig.transitionToStable) // will cause comitting of only "new" config
 
     case Entry(stableConfig: StableClusterConfiguration, _, _, _) =>
-//      if (!stableConfig.isPartOfNewConfiguration(self)) {
-//        log.info("Committed new configuration, this member is not part of it - stopping self.")
-//        goto(Follower)
-//      }
+      // simply ignore, once this message is in our log we started using the new configuration anyway,
+      // there's no need to apply this message onto the client state machine.
   }
 
   private val handleNormalEntry: PartialFunction[Any, Unit] = {
@@ -197,7 +194,6 @@ private[raft] trait Leader {
    * Configurations must be used by each node right away when they get appended to their logs (doesn't matter if not committed).
    * This method updates the Meta object if a configuration change is discovered.
    */
-  // todo duplication, see Follower!!!
   def maybeUpdateConfiguration(meta: LeaderMeta, entry: Command): LeaderMeta = entry match {
     case newConfig: ClusterConfiguration if newConfig.isNewerThan(meta.config) =>
       log.info("Appended new configuration, will start using it now: {}", newConfig)

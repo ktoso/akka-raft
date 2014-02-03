@@ -19,13 +19,13 @@ private[raft] trait Follower {
       if m.canVoteIn(term) =>
 
       log.info(s"Voting for $candidate in $term")
-      sender ! Vote(m.currentTerm)
+      sender ! VoteCandidate(m.currentTerm)
 
       stay() using m.withVote(term, candidate)
 
     case Event(RequestVote(term, candidateId, lastLogTerm, lastLogIndex), m: Meta) =>
       log.info(s"Rejecting vote for ${candidate()}, and $term, currentTerm: ${m.currentTerm}, already voted for: ${m.votes.get(term)}")
-      sender ! Reject(m.currentTerm)
+      sender ! DeclineCandidate(m.currentTerm)
       stay()
 
     // end of election
@@ -93,7 +93,6 @@ private[raft] trait Follower {
    * Configurations must be used by each node right away when they get appended to their logs (doesn't matter if not committed).
    * This method updates the Meta object if a configuration change is discovered.
    */
-  // todo duplication, see Leader!!!
   @tailrec final def maybeUpdateConfiguration(meta: Meta, entries: Seq[Command]): Meta = entries match {
     case Nil =>
       meta
@@ -123,13 +122,10 @@ private[raft] trait Follower {
     case entry: Entry[Command] => apply(entry.command)
   }
 
-  // todo rethink or remove? This is currently only used to NOT apply these messages onto the client state machine
   private val handleCommitIfSpecialEntry: PartialFunction[Any, Unit] = {
     case Entry(jointConfig: ClusterConfiguration, _, _, _) =>
-//      log.info("JointConsensusRaftConfiguration committed, will use it until new Configuration committed. " + jointConfig)
-
-//    case Entry(stableConfig: StableClusterConfiguration, _, _, _) =>
-//     log.info("StableRaftConfiguration committed, finishing phase of cluster membership change. " + stableConfig)
+      // simply ignore applying cluster configurations onto the client state machine,
+      // it's an internal thing and the client does not care about cluster config change.
   }
 
   // todo remove me

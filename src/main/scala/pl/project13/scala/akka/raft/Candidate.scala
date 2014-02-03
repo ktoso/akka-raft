@@ -27,14 +27,14 @@ private[raft] trait Candidate {
       }
 
     case Event(msg: RequestVote, m: ElectionMeta) if m.canVoteIn(msg.term) =>
-      sender ! Vote(m.currentTerm)
+      sender ! VoteCandidate(m.currentTerm)
       stay() using m.withVoteFor(msg.term, candidate())
 
     case Event(msg: RequestVote, m: ElectionMeta) =>
-      sender ! Reject(msg.term)
+      sender ! DeclineCandidate(msg.term)
       stay()
 
-    case Event(Vote(term), m: ElectionMeta) =>
+    case Event(VoteCandidate(term), m: ElectionMeta) =>
       val includingThisVote = m.incVote
 
       if (includingThisVote.hasMajority) {
@@ -45,7 +45,7 @@ private[raft] trait Candidate {
         stay() using includingThisVote
       }
 
-    case Event(Reject(term), m: ElectionMeta) =>
+    case Event(DeclineCandidate(term), m: ElectionMeta) =>
       log.info(s"Rejected vote by ${voter()}, in $term")
       stay()
 

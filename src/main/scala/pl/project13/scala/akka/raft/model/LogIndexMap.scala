@@ -68,7 +68,6 @@ case class LogIndexMap private (private var backing: Map[ActorRef, Int], private
       else math.min(oldQuorum, newQuorum)
   }
 
-  // todo make nicer...
   private def indexOnMajority(include: Set[ActorRef]): Int = {
     val indexCountPairs = backing
       .filterKeys(include)

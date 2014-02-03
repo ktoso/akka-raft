@@ -36,7 +36,7 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
     follower ! RequestVote(Term(2), self, Term(2), 2)
 
     // then
-    expectMsg(Vote(Term(2)))
+    expectMsg(VoteCandidate(Term(2)))
   }
 
   it should "Reject if Candidate has lower Term than it" in {
@@ -47,7 +47,7 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
     follower ! RequestVote(Term(1), self, Term(1), 1)
 
     // then
-    expectMsg(Reject(Term(2)))
+    expectMsg(DeclineCandidate(Term(2)))
   }
 
   it should "only vote once during a Term" in {
@@ -56,10 +56,10 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
 
     // when / then
     follower ! RequestVote(Term(2), self, Term(2), 2)
-    expectMsg(Vote(Term(2)))
+    expectMsg(VoteCandidate(Term(2)))
 
     follower ! RequestVote(Term(2), self, Term(2), 2)
-    expectMsg(Reject(Term(2)))
+    expectMsg(DeclineCandidate(Term(2)))
   }
 
   it should "become a Candidate if the electionTimeout has elapsed" in {

@@ -4,7 +4,6 @@ import pl.project13.scala.akka.raft.model.Term
 
 private[protocol] trait InternalProtocol extends Serializable {
 
-  // todo maybe throw out
   // just some types to make it more clear when these messages are sent, not actualy used (could be stripped)
   sealed trait InternalMessage  extends Message[Internal]
   sealed trait FollowerResponse extends Message[Internal]
@@ -12,8 +11,8 @@ private[protocol] trait InternalProtocol extends Serializable {
   sealed trait LeaderMessage    extends Message[Internal]
 
   case object BeginElection     extends ElectionMessage
-  case class Vote(term: Term)   extends ElectionMessage
-  case class Reject(term: Term) extends ElectionMessage // todo needs better name
+  case class VoteCandidate(term: Term)    extends ElectionMessage
+  case class DeclineCandidate(term: Term) extends ElectionMessage
 
   case class ElectedAsLeader()   extends ElectionMessage
   case class ElectionTimeout(since: Long)   extends ElectionMessage
