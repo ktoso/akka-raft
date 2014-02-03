@@ -31,13 +31,9 @@ class LeaderElectionTest extends RaftSpec(callingThreadDispatcher = false)
 
     // then
     eventually {
-      val leaderCount = members().count(_.stateName == Leader)
-      val candidateCount = members().count(_.stateName == Candidate)
-      val followerCount = members().count(_.stateName == Follower)
-
-      leaderCount should equal (1)
-      candidateCount should equal (0)
-      followerCount should equal (4)
+      leaders should have length 1
+      candidates should have length 0
+      followers should have length 4
     }
   }
 
@@ -56,13 +52,9 @@ class LeaderElectionTest extends RaftSpec(callingThreadDispatcher = false)
     infoMemberStates()
 
     eventually {
-      val leaderCount = members().count(_.stateName == Leader)
-      val candidateCount = members().count(_.stateName == Candidate)
-      val followerCount = members().count(_.stateName == Follower)
-
-      leaderCount should equal (1)
-      candidateCount should equal (0)
-      followerCount should equal (3)
+      leaders should have length 1
+      candidates should have length 0
+      followers should have length 3
     }
   }
 
@@ -72,11 +64,11 @@ class LeaderElectionTest extends RaftSpec(callingThreadDispatcher = false)
 
     // when
     val memberStates1 = members().sortBy(_.path.elements.last).map(_.stateName)
-    Thread.sleep(50)
+    Thread.sleep(400)
     val memberStates2 = members().sortBy(_.path.elements.last).map(_.stateName)
-    Thread.sleep(50)
+    Thread.sleep(400)
     val memberStates3 = members().sortBy(_.path.elements.last).map(_.stateName)
-    Thread.sleep(50)
+    Thread.sleep(400)
     val memberStates4 = members().sortBy(_.path.elements.last).map(_.stateName)
 
     info("Maintained state:")

@@ -74,21 +74,26 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
     super.afterEach()
   }
 
-  def maybeLeader() = members().find(_.stateName == Leader)
+  def maybeLeader() = _members.find(_.stateName == Leader)
 
   def leader() = maybeLeader getOrElse {
-    throw new RuntimeException("Unable to find leader! members: " + members(includingTerminated = true))
+    throw new RuntimeException("Unable to find leader! members: " + _members)
   }
 
-  def members(includingTerminated: Boolean = false) = {
-    _members.filterNot(!includingTerminated && _.isTerminated)
-  }
+  def leaders() =
+    members().filter(_.stateName == Leader)
 
-  def followers() = _members.filter(m => m.stateName == Follower && !m.isTerminated)
+  def members() =
+    _members
 
-  def follower(name: String) = followers().find(_.path.elements.last == name).get
+  def followers() =
+    _members.filter(m => m.stateName == Follower && !m.isTerminated)
 
-  def candidates() = _members.filter(m => m.stateName == Candidate && !m.isTerminated)
+  def follower(name: String) =
+    _members.find(_.path.elements.last == name).get
+
+  def candidates() =
+    _members.filter(m => m.stateName == Candidate && !m.isTerminated)
 
   def simpleName(ref: ActorRef) = {
     import collection.JavaConverters._
@@ -103,6 +108,7 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
 
   def killLeader() = {
     val leaderToStop = leader()
+    _members = _members filterNot { _ == leaderToStop }
     leaderToStop.stop()
     info(s"Killed leader: ${simpleName(leaderToStop)}")
     leaderToStop

@@ -2,9 +2,12 @@ package pl.project13.scala.akka.raft
 
 import pl.project13.scala.akka.raft.protocol._
 import concurrent.duration._
-import akka.testkit.TestProbe
+import akka.testkit.{TestFSMRef, TestProbe}
 import pl.project13.scala.akka.raft.example.protocol._
 import org.scalatest.concurrent.Eventually
+import akka.actor.ActorRef
+import akka.japi.pf.FSMStateFunctionBuilder
+import pl.project13.scala.akka.raft.example.WordConcatRaftActor
 
 class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false)
   with Eventually {
@@ -77,6 +80,16 @@ class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false)
       client.expectMsg(timeout, "and")
       client.expectMsg(timeout, "apples")
       client.expectMsg(timeout, "!")
+    }
+
+    Thread.sleep(1000)
+    eventually {
+      val logs = members() map { _.underlyingActor.replicatedLog.entries }
+
+      logs(0) === logs(1)
+      logs(1) === logs(2)
+      logs(2) === logs(3)
+      info("Logs of all Raft members are equal!")
     }
   }
 

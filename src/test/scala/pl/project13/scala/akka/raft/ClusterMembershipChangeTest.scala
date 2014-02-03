@@ -19,6 +19,8 @@ class ClusterMembershipChangeTest extends RaftSpec(callingThreadDispatcher = fal
   it should "allow to add additional servers" in {
     // given
     subscribeElectedLeader()
+    subscribeEntryComitted()
+
     awaitElectedLeader()
 
     info("Initial state: ")
@@ -27,33 +29,30 @@ class ClusterMembershipChangeTest extends RaftSpec(callingThreadDispatcher = fal
 
     // when
     val additionalActor = createActor(s"member-${initialMembers + 1}")
-    val newConfiguration = ClusterConfiguration(raftConfiguration.members + additionalActor)
+    val newConfiguration = ClusterConfiguration(raftConfiguration.members + additionalActor) // 0, 1
 
     initialLeader ! ChangeConfiguration(newConfiguration)
 
     // the bellow assertions pass when the new config is committed,
     // but it's also interesting to see in the logs, if propagation goes on properly, no specific test there
-    Thread.sleep(1000)
+    awaitEntryComitted(1)
 
     // then
-    eventually {
-      val leaderCount = members().filter(_.stateName == Leader)
-      val candidateCount = members().filter(_.stateName == Candidate)
-      val followerCount = members().filter(_.stateName == Follower)
+    val leaderCount = leaders()
+    val candidateCount = candidates()
+    val followerCount = followers()
 
-      infoMemberStates()
-      info("leader   : " + leaderCount.map(simpleName))
-      info("candidate: " + candidateCount.map(simpleName))
-      info("follower : " + followerCount.map(simpleName))
-      info("")
+    infoMemberStates()
+    info("leader   : " + leaderCount.map(simpleName))
+    info("candidate: " + candidateCount.map(simpleName))
+    info("follower : " + followerCount.map(simpleName))
+    info("")
 
+    additionalActor.stateName should equal (Follower)
 
-      additionalActor.stateName should equal (Follower)
-
-      leaderCount should have length (1)
-      candidateCount should have length (0)
-      followerCount should have length (5)
-    }
+    leaderCount should have length 1
+    candidateCount should have length 0
+    followerCount should have length 5
 
     info("After adding member-6, and configuration change: ")
     infoMemberStates()
