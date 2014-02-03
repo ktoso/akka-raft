@@ -10,7 +10,7 @@ import pl.project13.scala.akka.raft.example.protocol._
 
 class LeaderTest extends TestKit(ActorSystem("test-system")) with FlatSpecLike with Matchers
   with ImplicitSender
-  with BeforeAndAfterEach with BeforeAndAfterAll {
+  with BeforeAndAfter with BeforeAndAfterAll {
 
   behavior of "Leader"
 
@@ -18,8 +18,7 @@ class LeaderTest extends TestKit(ActorSystem("test-system")) with FlatSpecLike w
 
   var data: LeaderMeta = _
   
-  override def beforeEach() {
-    super.beforeEach()
+  before {
     data = Meta.initial(leader)
       .copy(
         currentTerm = Term(1),
@@ -29,13 +28,16 @@ class LeaderTest extends TestKit(ActorSystem("test-system")) with FlatSpecLike w
 
   it should "commit an entry once it has been written by the majority of the Followers" in {
     // given
+    val probe1, probe2, probe3 = TestProbe().ref
+
+    data = data.copy(config = RaftConfiguration(probe1, probe2, probe3))
     leader.setState(Leader, data)
     val actor = leader.underlyingActor
 
     val matchIndex = LogIndexMap.initialize(Set.empty, -1)
-    matchIndex.put(TestProbe().ref, 2)
-    matchIndex.put(TestProbe().ref, 2)
-    matchIndex.put(TestProbe().ref, 1)
+    matchIndex.put(probe1, 2)
+    matchIndex.put(probe2, 2)
+    matchIndex.put(probe3, 1)
 
     var replicatedLog = actor.replicatedLog
     replicatedLog += model.Entry(AppendWord("a"), Term(1), 1)
