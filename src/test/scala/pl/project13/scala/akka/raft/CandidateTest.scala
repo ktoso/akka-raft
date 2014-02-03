@@ -52,21 +52,20 @@ class CandidateTest extends RaftSpec with BeforeAndAfterEach
     // given
     subscribeBeginElection()
 
-    implicit val patienceConfig = PatienceConfig(timeout = scaled(Span(50, Millis)), interval = scaled(Span(5, Millis)))
+    implicit val patienceConfig = PatienceConfig(timeout = scaled(Span(100, Millis)), interval = scaled(Span(10, Millis)))
 
     val entry = Entry(AppendWord("x"), Term(3), 5)
     candidate.setState(Candidate, data)
 
     // when
     candidate ! AppendEntries(Term(3), Term(2), 6, entry :: Nil, 5)
-    Thread.sleep(50)
 
     // then
-    // should have reverted to Follower
-    candidate.stateName === Follower
-
-    // and applied the message in Follower
     eventually {
+      // should have reverted to Follower
+      candidate.stateName === Follower
+
+      // and applied the message in Follower
       candidate.underlyingActor.replicatedLog.entries contains entry
     }
   }
