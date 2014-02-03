@@ -3,14 +3,12 @@ package pl.project13.scala.akka.raft
 import akka.actor.{Actor, ActorRef, LoggingFSM}
 import scala.concurrent.duration._
 import scala.util.Random
-import scala.collection.immutable
-
-import protocol._
 import java.util.concurrent.TimeUnit
-import pl.project13.scala.akka.raft.model.{Entry, ReplicatedLog, Term, LogIndexMap}
-import pl.project13.scala.akka.raft.protocol.RaftStates._
 
-trait RaftActor extends RaftStateMachine
+import model._
+import protocol._
+
+abstract class RaftActor extends RaftStateMachine
   with Actor with LoggingFSM[RaftState, Metadata]
   with Follower with Candidate with Leader {
 
@@ -19,7 +17,6 @@ trait RaftActor extends RaftStateMachine
 
   private val config = context.system.settings.config
 
-  private val HeartbeatTimerName = "heartbeat-timer"
   private val ElectionTimeoutTimerName = "election-timer"
 
   // todo rethink if needed
@@ -43,11 +40,12 @@ trait RaftActor extends RaftStateMachine
   var matchIndex = LogIndexMap.initialize(Set.empty, -1)
 
   override def preStart() {
-    val timeout = resetElectionTimeout()
-    log.info("Starting new Raft member. Initial election timeout: " + timeout)
+    log.info("Starting new Raft member, will wait for raft cluster configuration...")
   }
 
-  startWith(Follower, Meta.initial)
+  startWith(Init, Meta.initial)
+
+  when(Init)(awaitInitialConfigurationBehavior)
 
   when(Follower)(followerBehavior orElse clusterManagementBehavior)
 
@@ -55,20 +53,39 @@ trait RaftActor extends RaftStateMachine
 
   when(Leader)(leaderBehavior orElse clusterManagementBehavior)
 
-  /** Handles adding / removing raft members; Should be handled in every state */ // todo more tests around this
+  /** Waits for initial cluster configuration. Step needed before we can start voting for a Leader. */
+  lazy val awaitInitialConfigurationBehavior: StateFunction = {
+    case Event(ChangeConfiguration(initialConfig), m: Meta) =>
+      log.info(s"Applying initial raft cluster configuration. Consists of [{}] nodes: {}",
+        initialConfig.members.size,
+        initialConfig.members.map(_.path.elements.last).mkString("{", ", ", "}"))
+
+      val timeout = resetElectionTimeout()
+      log.info("Finished init of new Raft member, becoming Follower. Initial election timeout: " + timeout)
+      goto(Follower) using m.copy(config = initialConfig)
+
+    case Event(msg: AppendEntries[Command], m: Meta) =>
+      log.info("Got message from a Leader, but am in Init state. Will ask for it's configuration and join Raft cluster.")
+      leader() ! RequestConfiguration
+      stay()
+  }
+
+  /** Handles adding / removing raft members; Should be handled in every state */
   lazy val clusterManagementBehavior: StateFunction = {
-    case Event(RaftMemberAdded(newMember), m: Meta) =>
-      val all = m.members + newMember
-      log.info(s"Members changed, current: [size = ${all.size}] ${all.map(_.path.elements.last).mkString("[", ", ", "]")}, added: $newMember")
+    // enter joint consensus phase of configuration comitting
+    case Event(ChangeConfiguration(newConfiguration), m: Metadata) =>
+      val transitioningConfig = m.config transitionTo newConfiguration
 
-      // todo migration period initiated here, right?
-      stay() using m.copy(members = all)
+      log.info(s"Starting transition to new Configuration changed, " +
+        s"old [size: ${m.config.members.size}]: ${simpleNames(m.config.members)}, migrating to: $transitioningConfig")
 
-    case Event(RaftMemberRemoved(removed), m: Meta) =>
-      val all = m.members - removed
-      log.info(s"Members changed, current: [size = ${all.size}] ${all.map(_.path.elements.last).mkString("[", ", ", "]")}, removed: $removed")
+      // configuration change goes over the same process as log appending
+      // here we initiate the 1st phase - committing the "joint consensus config", which includes all nodes from these configs
+      // the 2nd phase is initiated upon committing of this entry to the log.
+      // Once the new config is committed, nodes that are not included can step-down
+      self ! ClientMessage(self, transitioningConfig)
 
-      stay() using m.copy(members = all)
+      stay()
   }
 
   onTransition {
@@ -92,41 +109,6 @@ trait RaftActor extends RaftStateMachine
   initialize() // akka internals; MUST be last call in constructor
 
   // helpers -----------------------------------------------------------------------------------------------------------
-
-  def stopHeartbeat() {
-    cancelTimer(HeartbeatTimerName)
-  }
-
-  def startHeartbeat(m: LeaderMeta) {
-//  def startHeartbeat(currentTerm: Term, members: Set[ActorRef]) {
-    sendHeartbeat(m)
-    log.info(s"Starting hearbeat, with interval: $heartbeatInterval")
-    setTimer(HeartbeatTimerName, SendHeartbeat, heartbeatInterval, repeat = true)
-  }
-
-  /** heartbeat is implemented as basically sending AppendEntry messages */
-  def sendHeartbeat(m: LeaderMeta) {
-    replicateLog(m)
-  }
-
-  def replicateLog(m: LeaderMeta) {
-    m.others foreach { member =>
-      // todo remove me
-      log.info(s"""sending : ${AppendEntries(
-              m.currentTerm,
-              replicatedLog,
-              fromIndex = nextIndex.valueFor(member),
-              leaderCommitId = replicatedLog.committedIndex
-            )} to $member""")
-
-      member ! AppendEntries(
-        m.currentTerm,
-        replicatedLog,
-        fromIndex = nextIndex.valueFor(member),
-        leaderCommitId = replicatedLog.committedIndex
-      )
-    }
-  }
 
   def cancelElectionTimeout() {
     cancelTimer(ElectionTimeoutTimerName)
@@ -167,7 +149,7 @@ trait RaftActor extends RaftStateMachine
   def beginElection(m: Meta) = {
     resetElectionTimeout()
 
-    if (m.members.isEmpty) {
+    if (m.config.members.isEmpty) {
       // cluster is still discovering nodes, keep waiting
       goto(Follower) using m
     } else {
@@ -184,51 +166,19 @@ trait RaftActor extends RaftStateMachine
     stay()
   }
 
-
-
-  def commitUntilLeadersIndex(m: Meta, msg: AppendEntries[Command]): ReplicatedLog[Command] = {
-    val entries = replicatedLog.between(replicatedLog.committedIndex, msg.leaderCommitId)
-
-    entries.foldLeft(replicatedLog) { case (repLog, entry) =>
-      log.info(s"committing entry $entry on Follower, leader is committed until [${msg.leaderCommitId}]")
-      apply(entry.command)
-
-      repLog.commit(entry.index)
-    }
-  }
-
-  def maybeCommitEntry(matchIndex: LogIndexMap, replicatedLog: ReplicatedLog[Command]): ReplicatedLog[Command] = {
-    val indexOnMajority = matchIndex.indexOnMajority
-    val willCommit = indexOnMajority > replicatedLog.committedIndex
-    log.info(s"Majority of members have index: $indexOnMajority persisted. (Comitted index: ${replicatedLog.committedIndex}, will commit now: $willCommit)")
-
-    if (willCommit) {
-      val entries = replicatedLog.between(replicatedLog.committedIndex, indexOnMajority)
-      log.info(s"Before commit; indexOnMajority:$indexOnMajority, replicatedLog.committedIndex: ${replicatedLog.committedIndex} => entries = $entries")
-
-      entries foreach { entry =>
-        log.info(s"Committing log at index: ${entry.index}; Applying command: ${entry.command}, will send result to client: ${entry.client}")
-
-        val result = apply(entry.command)
-        entry.client map { _ ! result }
-      }
-
-      replicatedLog.commit(indexOnMajority)
-    } else {
-      replicatedLog
-    }
-  }
-
   /** `true` if this follower is at `Term(2)`, yet the incoming term is `t > Term(3)` */
   def isInconsistentTerm(currentTerm: Term, term: Term): Boolean = term < currentTerm
 
   // sender aliases, for readability
-  @inline def follower = sender()
-  @inline def candidate = sender()
-  @inline def leader = sender()
+  @inline def follower() = sender()
+  @inline def candidate() = sender()
+  @inline def leader() = sender()
 
-  @inline def voter = sender() // not explicitly a Raft role, but makes it nice to read
+  @inline def voter() = sender() // not explicitly a Raft role, but makes it nice to read
   // end of sender aliases
+
+  private def simpleNames(refs: Iterable[ActorRef]) = refs.map(_.path.elements.last).mkString("{", ", ", "}")
+
 }
 
 
