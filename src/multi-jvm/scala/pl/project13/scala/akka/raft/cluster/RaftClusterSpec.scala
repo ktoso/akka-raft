@@ -22,6 +22,7 @@ abstract class RaftClusterSpec(config: MultiNodeConfig) extends MultiNodeSpec(co
     Await.result(selection.resolveOne(1.second), 1.second)
   }
 
+  // todo can be implemented by listening to remote eventStream: http://doc.akka.io/docs/akka/snapshot/java/remoting.html#remote-events
   def awaitLeaderElected(members: List[ActorRef]) {
     val start = System.currentTimeMillis()
     awaitCond(
