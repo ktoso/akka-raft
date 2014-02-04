@@ -15,8 +15,6 @@ Basic info
 Raft is a distributed consensus algorithm, much like Paxos (but simpler).
 This implementation is fully akka (and akka-cluster) based, and can be used to deploy a replicated state machine on top of akka clusters.
 
-Usage looks (_APIs still subject to change_):
-
 **THIS API IS STILL SUBJECT TO CHANGE**
 
 ```scala
