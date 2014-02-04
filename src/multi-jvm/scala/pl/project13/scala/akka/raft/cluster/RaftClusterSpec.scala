@@ -25,6 +25,9 @@ abstract class RaftClusterSpec(config: MultiNodeConfig) extends MultiNodeSpec(co
   def askMemberForState(refs: ActorRef): MemberAndState =
     askMembersForState(refs).head
 
+  def askMembersForState(refs: List[ActorRef]): List[MemberAndState] =
+    askMembersForState(refs: _*)
+
   def askMembersForState(refs: ActorRef*): List[MemberAndState] = {
     val stateFutures = refs map { ref => (ref ? AskForState).mapTo[IAmInState] }
     val statesFuture = Future.sequence(stateFutures)
@@ -40,8 +43,15 @@ abstract class RaftClusterSpec(config: MultiNodeConfig) extends MultiNodeSpec(co
   }
 
   implicit class MemberCounter(members: List[MemberAndState]) {
-    def countFollowers = members.count(_.state == Follower)
-    def countCandidates = members.count(_.state == Candidate)
-    def countLeaders = members.count(_.state == Leader)
+    def followers() = members.filter(_.state == Follower)
+    def candidates() = members.filter(_.state == Candidate)
+    def leaders() = members.filter(_.state == Leader)
+
+    def leader() = maybeLeader().getOrElse { throw new Exception("Unable to find leader! Members: " + members) }
+    def maybeLeader() = {
+      val leads = leaders()
+      require(leads.size < 2, s"Must have 1 or 0 leaders, yet found ${leads.size}! Members: $members")
+      leads.headOption
+    }
   }
 }

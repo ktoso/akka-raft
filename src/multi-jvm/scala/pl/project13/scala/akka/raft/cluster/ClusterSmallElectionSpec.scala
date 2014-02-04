@@ -10,6 +10,7 @@ import scala.concurrent.Await
 import akka.util.Timeout
 import clusters._
 import pl.project13.scala.akka.raft.protocol._
+import pl.project13.scala.akka.raft.{ClusterConfiguration, RaftConfiguration}
 
 abstract class SmallClusterElectionSpec extends RaftClusterSpec(ThreeNodesCluster)
   with ImplicitSender {
@@ -47,14 +48,21 @@ abstract class SmallClusterElectionSpec extends RaftClusterSpec(ThreeNodesCluste
 
     Cluster(system).unsubscribe(testActor)
 
-    testConductor.enter("all-up")
+    testConductor.enter("all-nodes-up")
 
     val member1 = Await.result(system.actorSelection(RootActorPath(firstAddress) / "user" / "member-*").resolveOne(1.second), 1.second)
     val member2 = Await.result(system.actorSelection(RootActorPath(secondAddress) / "user" / "member-*").resolveOne(1.second), 1.second)
     val member3 = Await.result(system.actorSelection(RootActorPath(thirdAddress) / "user" / "member-*").resolveOne(1.second), 1.second)
-
+    val members = member1 :: member2 :: member3 :: Nil
+    
+    // initialize raft
+    val clusterConfig = ClusterConfiguration(members)
+    members foreach { _ ! ChangeConfiguration(clusterConfig) }
+    
     // give raft a bit of time to discover nodes and elect a leader
     Thread.sleep(1000)
+
+    testConductor.enter("raft-up")
 
     val state1 = askMemberForState(member1)
     val state2 = askMemberForState(member2)

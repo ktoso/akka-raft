@@ -8,6 +8,8 @@ import akka.actor.Props
 import pl.project13.scala.akka.raft.example.cluster.WordConcatClusterRaftActor
 import akka.util.Timeout
 import clusters._
+import pl.project13.scala.akka.raft.ClusterConfiguration
+import pl.project13.scala.akka.raft.protocol._
 
 abstract class ClusterWithManyMembersOnEachNodeElectionSpec extends RaftClusterSpec(ThreeNodesCluster)
   with ImplicitSender {
@@ -53,27 +55,31 @@ abstract class ClusterWithManyMembersOnEachNodeElectionSpec extends RaftClusterS
 
     Cluster(system).unsubscribe(testActor)
 
-    testConductor.enter("all-up")
+    testConductor.enter("all-nodes-up")
 
     val member1 = selectActorRef(firstAddress,  1)
     val member2 = selectActorRef(secondAddress, 2)
     val member3 = selectActorRef(thirdAddress,  3)
     val member4 = selectActorRef(firstAddress,  4)
     val member5 = selectActorRef(secondAddress, 5)
+    val members = member1 :: member2 :: member3 :: member4 :: member5 :: Nil
+
+    val clusterConfig = ClusterConfiguration(members)
+    members foreach { _ ! ChangeConfiguration(clusterConfig) }
 
     // give raft a bit of time to discover nodes and elect a leader
-    Thread.sleep(1000)
+    testConductor.enter("raft-up")
 
-    val memberStates = askMembersForState(member1, member2, member3, member4, member5)
-    
+    val memberStates = askMembersForState(members)
+
     info("Cluster state:")
     memberStates foreach { state =>
       info(s"${state.simpleName} is ${state.state}")
     }
 
-    memberStates.countLeaders should equal (1)
-    memberStates.countCandidates should equal (0)
-    memberStates.countFollowers should equal (4)
+    memberStates.leaders should have length 1
+    memberStates.candidates should have length 0
+    memberStates.followers should have length 4
   }
 
 }
