@@ -10,11 +10,13 @@ import akka.util.Timeout
 import clusters._
 import pl.project13.scala.akka.raft.ClusterConfiguration
 import pl.project13.scala.akka.raft.protocol._
+import org.scalatest.concurrent.Eventually
 
 abstract class ClusterWithManyMembersOnEachNodeElectionSpec extends RaftClusterSpec(ThreeNodesCluster)
+  with Eventually
   with ImplicitSender {
 
-  implicit val AskTimeout = {
+  implicit val defaultTimeout = {
     import concurrent.duration._
     Timeout(3.seconds)
   }
@@ -70,16 +72,17 @@ abstract class ClusterWithManyMembersOnEachNodeElectionSpec extends RaftClusterS
     // give raft a bit of time to discover nodes and elect a leader
     testConductor.enter("raft-up")
 
+    awaitLeaderElected(members)
+
     val memberStates = askMembersForState(members)
 
-    info("Cluster state:")
-    memberStates foreach { state =>
-      info(s"${state.simpleName} is ${state.state}")
-    }
+    memberStates.infoMemberStates()
 
-    memberStates.leaders should have length 1
-    memberStates.candidates should have length 0
-    memberStates.followers should have length 4
+    eventually {
+      memberStates.leaders should have length 1
+      memberStates.candidates should have length 0
+      memberStates.followers should have length 4
+    }
   }
 
 }

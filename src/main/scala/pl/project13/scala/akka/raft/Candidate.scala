@@ -53,10 +53,10 @@ private[raft] trait Candidate {
 
     // handle appends
     case Event(append: AppendEntries[Entry[Command]], m: ElectionMeta) =>
-      log.info("MAYBE Reverting to Follower, because got AppendEntries from Leader in {}, but am in {}", append.term, m.currentTerm)
-      val terms = append.term >= m.currentTerm
+      val leaderIsAhead = append.term >= m.currentTerm
 
-      if (terms) {
+      if (leaderIsAhead) {
+        log.info("Reverting to Follower, because got AppendEntries from Leader in {}, but am in {}", append.term, m.currentTerm)
         self.tell(append, sender())
         goto(Follower) using m.forFollower
       } else {

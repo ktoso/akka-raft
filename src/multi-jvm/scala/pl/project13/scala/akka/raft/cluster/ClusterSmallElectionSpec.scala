@@ -15,7 +15,7 @@ import pl.project13.scala.akka.raft.{ClusterConfiguration, RaftConfiguration}
 abstract class SmallClusterElectionSpec extends RaftClusterSpec(ThreeNodesCluster)
   with ImplicitSender {
 
-  implicit val AskTimeout = {
+  implicit val defaultTimeout = {
     import concurrent.duration._
     Timeout(3.seconds)
   }
