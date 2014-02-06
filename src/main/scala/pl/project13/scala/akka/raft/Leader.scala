@@ -186,7 +186,7 @@ private[raft] trait Leader {
   private val handleNormalEntry: PartialFunction[Any, Unit] = {
     case entry: Entry[Command] =>
       log.info(s"Committing log at index: ${entry.index}; Applying command: ${entry.command}, will send result to client: ${entry.client}")
-      val result = apply(entry.command)
+      val result = apply(entry.command) // todo what if we apply a message the actor didnt understand? should fail "nicely"
       entry.client foreach { _ ! result }
   }
 

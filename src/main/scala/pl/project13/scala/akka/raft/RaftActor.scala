@@ -8,8 +8,7 @@ import java.util.concurrent.TimeUnit
 import model._
 import protocol._
 
-abstract class RaftActor extends RaftStateMachine
-  with Actor with LoggingFSM[RaftState, Metadata]
+abstract class RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
   with Follower with Candidate with Leader {
 
   type Command
@@ -38,6 +37,9 @@ abstract class RaftActor extends RaftStateMachine
   var nextIndex = LogIndexMap.initialize(Set.empty, replicatedLog.lastIndex)
   // todo or move to Meta
   var matchIndex = LogIndexMap.initialize(Set.empty, -1)
+
+  // differs from receive that the return type is actually used (internally by RaftActor)
+  def apply: PartialFunction[Any, Any]
 
   override def preStart() {
     log.info("Starting new Raft member, will wait for raft cluster configuration...")

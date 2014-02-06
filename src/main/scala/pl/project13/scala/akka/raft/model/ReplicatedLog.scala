@@ -95,7 +95,7 @@ case class ReplicatedLog[Command](
   def between(fromIndex: Int, toIndex: Int): List[Entry[Command]] =
     entries.slice(fromIndex + 1, toIndex + 1)
 
-  def firstIndexInTerm(term: Term): Int = term.termNr match {
+  def firstIndexInTerm(term: Term): Int = (term.termNr: @switch) match {
     case 0 => 0
     case 1 => 0
     case _ => entries.zipWithIndex find { case (e, i) => e.term == term } map { _._2 } getOrElse 0
@@ -138,5 +138,6 @@ case class Entry[T](
 
 trait SnapshotEntry {
   this: Entry[_] =>
-  def isSnapshot = true
+  def data: Any = command
+  override def isSnapshot = true
 }
