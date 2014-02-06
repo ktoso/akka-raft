@@ -3,6 +3,8 @@ package pl.project13.scala.akka.raft.model
 import org.scalatest._
 import pl.project13.scala.akka.raft.model._
 import pl.project13.scala.akka.raft.example.protocol.WordConcatProtocol
+import akka.persistence.serialization.Snapshot
+import pl.project13.scala.akka.raft.ClusterConfiguration
 
 class ReplicatedLogTest extends FlatSpec with Matchers
   with WordConcatProtocol {
@@ -258,6 +260,32 @@ class ReplicatedLogTest extends FlatSpec with Matchers
     // then
     initialEntry.headOption should be ('defined)
     initialEntry.head should equal (firstEntry)
+  }
+
+  "dropCompacted" should "" in {
+    // given
+    var replicatedLog = ReplicatedLog.empty[String](1)
+    (1 to 21) foreach { i =>
+      replicatedLog += Entry(s"e-$i", Term(1 + i / 10), i)
+    }
+
+    info("replicatedLog.lastTerm = " + replicatedLog.lastTerm)
+    info("replicatedLog.lastIndex = " + replicatedLog.lastIndex)
+
+    // when
+    // we compact and store a snapshot somewhere
+    val meta = RaftSnapshotMetadata(Term(2), 18, ClusterConfiguration(Nil))
+    val snapshot = RaftSnapshot(meta, "example")
+
+    info(s"Snapshotting until: $meta")
+    val compactedLog = replicatedLog compactedWith snapshot
+
+    // then
+    info("compactedLog = " + compactedLog)
+    compactedLog.entries should have length 4
+
+    compactedLog.lastIndex should equal (replicatedLog.lastIndex)
+    compactedLog.lastTerm should equal (replicatedLog.lastTerm)
   }
 
 }

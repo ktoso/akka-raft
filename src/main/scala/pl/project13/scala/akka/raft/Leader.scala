@@ -122,7 +122,7 @@ private[raft] trait Leader {
     val AppendRejected(followerTerm, followerIndex) = msg
 
     log.info(s"Follower ${follower()} rejected write: $followerTerm @ $followerIndex, back out the first index in this term and retry")
-    log.info(s"Leader log state: " + replicatedLog.entries)
+//    log.info(s"Leader log state: " + replicatedLog.entries)
 
     nextIndex.putIfSmaller(follower(), followerIndex)
 

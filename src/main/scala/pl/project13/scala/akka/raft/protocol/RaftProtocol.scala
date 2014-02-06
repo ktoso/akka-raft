@@ -2,7 +2,7 @@ package pl.project13.scala.akka.raft.protocol
 
 import akka.actor.ActorRef
 import scala.collection.immutable
-import pl.project13.scala.akka.raft.model.{Entry, ReplicatedLog, Term}
+import pl.project13.scala.akka.raft.model.{RaftSnapshot, Entry, ReplicatedLog, Term}
 import pl.project13.scala.akka.raft.ClusterConfiguration
 
 private[protocol] trait RaftProtocol extends Serializable {
@@ -14,12 +14,14 @@ private[protocol] trait RaftProtocol extends Serializable {
    */
   case class ClientMessage[T](@deprecated client: ActorRef, cmd: T) extends RaftMessage
 
+
   case class RequestVote(
     term: Term,
     candidateId: ActorRef,
     lastLogTerm: Term,
     lastLogIndex: Int
   ) extends RaftMessage
+
 
   case class AppendEntries[T](
     term: Term,
@@ -46,6 +48,15 @@ private[protocol] trait RaftProtocol extends Serializable {
 
     }
   }
+
+
+  /**
+   * Raft extension: Snapshots (§7 Log Compaction)
+   * Used by the Leader to install a snapshot onto an "catching up from very behind" Follower.
+   * It's the Followers responsibility to load the snapshot data and apply it to it's state machine, by using akka-persistence provided mechanisms.
+   */
+  case class InstallSnapshot(snapshotMeta: RaftSnapshot)
+
 
   /**
    * Used to initiate configuration transitions.

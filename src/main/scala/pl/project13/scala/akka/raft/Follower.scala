@@ -76,16 +76,13 @@ private[raft] trait Follower {
   def leaderIsLagging(msg: AppendEntries[Command], m: Meta): Boolean =
     msg.term < m.currentTerm
 
-  /**
-   * @param atIndex is used to drop entries after this, and append our entries from there instead
-   */
   def append(entries: immutable.Seq[Entry[Command]], m: Meta): AppendSuccessful = {
     val atIndex = entries.map(_.index).min
-    log.debug("log before append: " + replicatedLog.entries)
+//    log.debug("log before append: " + replicatedLog.entries)
     log.debug(bold("executing: " + s"replicatedLog = replicatedLog.append($entries, $atIndex)"))
 
     replicatedLog = replicatedLog.append(entries, atIndex)
-    log.debug("log after append: " + replicatedLog.entries)
+//    log.debug("log after append: " + replicatedLog.entries)
     AppendSuccessful(replicatedLog.lastTerm, replicatedLog.lastIndex)
   }
 

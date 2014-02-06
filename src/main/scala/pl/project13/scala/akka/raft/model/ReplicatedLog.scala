@@ -7,7 +7,7 @@ import scala.annotation.switch
  * @param defaultBatchSize number of commands that can be sent together in one [[pl.project13.scala.akka.raft.protocol.RaftProtocol.AppendEntries]] message.
  */
 case class ReplicatedLog[Command](
-  entries: List[Entry[Command]],
+  private[raft] entries: List[Entry[Command]],
   committedIndex: Int,
   defaultBatchSize: Int
 ) {
@@ -51,7 +51,7 @@ case class ReplicatedLog[Command](
 
   def putWithDroppingInconsistent(replicatedEntry: Entry[Command]): ReplicatedLog[Command] = {
     val replicatedIndex = replicatedEntry.index
-    if (entries.isDefinedAt(replicatedIndex)) {
+    if (entries.isDefinedAt(replicatedIndex)) { // must now use index since we can have snapshots
       val localEntry = entries(replicatedIndex)
 
       if (localEntry == replicatedEntry) this // we're consistent with the replicated log
@@ -59,6 +59,19 @@ case class ReplicatedLog[Command](
     } else {
       // nothing to drop
       this
+    }
+  }
+
+  def compactedWith(snapshot: RaftSnapshot): ReplicatedLog[Command] = {
+    val snapshotHasLaterTerm = snapshot.meta.lastIncludedTerm > lastTerm
+    val snapshotHasLaterIndex = snapshot.meta.lastIncludedIndex > lastIndex
+
+    if (snapshotHasLaterTerm && snapshotHasLaterIndex) {
+      // total substitution, snapshot is from the future = replace all we had
+      copy(entries = snapshot.toEntrySingleList)
+    } else {
+      val entriesWhereSnapshotteEntriesDropped = entries dropWhile { e => e.index <= snapshot.meta.lastIncludedIndex }
+      copy(entries = snapshot.toEntry[Command] :: entriesWhereSnapshotteEntriesDropped)
     }
   }
 
@@ -94,7 +107,7 @@ case class ReplicatedLog[Command](
 
   def committedEntries = entries.slice(0, committedIndex)
 
-  def notcommittedEntries = entries.slice(committedIndex + 1, entries.length)
+  def notCommittedEntries = entries.slice(committedIndex + 1, entries.length)
 }
 
 class EmptyReplicatedLog[T](defaultBatchSize: Int) extends ReplicatedLog[T](List.empty, -1, defaultBatchSize) {
@@ -113,10 +126,17 @@ case class Entry[T](
   client: Option[ActorRef] = None
 ) {
 
+  def isSnapshot = false
+
   def prevTerm = term.prev
 
   def prevIndex = index - 1 match {
     case -1 => 0
     case n  => n
   }
+}
+
+trait SnapshotEntry {
+  this: Entry[_] =>
+  def isSnapshot = true
 }
