@@ -27,8 +27,9 @@ class NonLeaderInteractionTest extends RaftSpec(callingThreadDispatcher = false)
 
     val msg = ClientMessage(client.ref, AppendWord("test"))
 
-    When("The client sends a write message to a non-leader member")
-    followers().head ! msg
+    val follower = followers().head
+    When(s"The client sends a write message to a non-leader member (${simpleName(follower)})")
+    follower ! msg
 
     Then("That non-leader, should respons with the leader's ref")
     val leaderIs = expectMsgType[LeaderIs](max = 1.second)
