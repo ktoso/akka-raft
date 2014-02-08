@@ -40,12 +40,14 @@ class CandidateTest extends RaftSpec with BeforeAndAfterEach
     // when
     awaitBeginElection()
 
-    Thread.sleep(electionTimeoutMax.toMillis)
-    Thread.sleep(electionTimeoutMax.toMillis)
+    Thread.sleep(electionTimeoutMin.toMillis)
+    Thread.sleep(electionTimeoutMin.toMillis)
 
     // then
     awaitBeginElection() // after a while, should trigger another one
-    candidate.stateName should equal (Candidate)
+    eventually {
+      candidate.stateName should equal (Candidate)
+    }
   }
 
   it should "go back to Follower state if got message from elected Leader (from later Trerm)" in {
