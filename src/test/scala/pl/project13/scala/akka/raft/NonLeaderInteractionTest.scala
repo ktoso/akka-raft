@@ -2,17 +2,16 @@ package pl.project13.scala.akka.raft
 
 import pl.project13.scala.akka.raft.protocol._
 import concurrent.duration._
-import akka.testkit.{TestFSMRef, TestProbe}
+import akka.testkit.TestProbe
 import pl.project13.scala.akka.raft.example.protocol._
 import org.scalatest.concurrent.Eventually
-import akka.actor.ActorRef
-import akka.japi.pf.FSMStateFunctionBuilder
-import pl.project13.scala.akka.raft.example.WordConcatRaftActor
+import org.scalatest.GivenWhenThen
 
-class LogReplicationTest extends RaftSpec(callingThreadDispatcher = false)
+class NonLeaderInteractionTest extends RaftSpec(callingThreadDispatcher = false)
+  with GivenWhenThen
   with Eventually {
 
-  behavior of "Log Replication"
+  behavior of "Non Leader Interaction"
 
   val initialMembers = 5
 

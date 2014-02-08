@@ -11,13 +11,20 @@ private[raft] trait Candidate {
   protected def raftConfig: RaftConfiguration
 
   val candidateBehavior: StateFunction = {
+    // message from client, tell it that we know of no leader
+    // todo that's what I meant about the types being under-used... Todo refactor so we can clearly check this!
+    case Event(msg: ClientMessage[Command], m: ElectionMeta) if msg.cmd.isInstanceOf[AppendEntries[Command]] =>
+      log.info("Candidate got {} from client; Respond with anarchy - there is no leader.", msg)
+      sender() ! LeaderIs(None)
+      stay()
+
     // election
     case Event(BeginElection, m: ElectionMeta) =>
       if (m.config.members.isEmpty) {
         log.info("Tried to initialize election with no members...")
         goto(Follower) using m.forFollower
       } else {
-        log.info(s"Initializing election (among ${m.config.members.size} nodes) for ${m.currentTerm}")
+        log.info("Initializing election (among {} nodes) for {}", m.config.members.size, m.currentTerm)
 
         val request = RequestVote(m.currentTerm, self, replicatedLog.lastTerm, replicatedLog.lastIndex)
         m.membersExceptSelf foreach { _ ! request }
@@ -38,15 +45,15 @@ private[raft] trait Candidate {
       val includingThisVote = m.incVote
 
       if (includingThisVote.hasMajority) {
-        log.info(s"Received vote by ${voter()}; Won election with ${includingThisVote.votesReceived} of ${m.config.members.size} votes")
+        log.info("Received vote by {}; Won election with {} of {} votes", voter(), includingThisVote.votesReceived, m.config.members.size)
         goto(Leader) using m.forLeader
       } else {
-        log.info(s"Received vote by ${voter()}; Have ${includingThisVote.votesReceived} of ${m.config.members.size} votes")
+        log.info("Received vote by {}; Have {} of {} votes", voter(), includingThisVote.votesReceived, m.config.members.size)
         stay() using includingThisVote
       }
 
     case Event(DeclineCandidate(term), m: ElectionMeta) =>
-      log.info(s"Rejected vote by ${voter()}, in $term")
+      log.info("Rejected vote by {}, in term {}", voter(), term)
       stay()
 
     // end of election
@@ -64,14 +71,14 @@ private[raft] trait Candidate {
       }
 
     // ending election due to timeout
-    case Event(ElectionTimeout(since), m: ElectionMeta) if m.config.members.size > 1 =>
-      log.info(s"Voting timeout, starting a new election (among ${m.config.members.size})...")
+    case Event(ElectionTimeout, m: ElectionMeta) if m.config.members.size > 1 =>
+      log.info("Voting timeout, starting a new election (among {})...", m.config.members.size)
       self ! BeginElection
       stay() using m.forNewElection
 
     // would like to start election, but I'm all alone! ;-(
-    case Event(ElectionTimeout(since), m: ElectionMeta) =>
-      log.info(s"Voting timeout, unable to start election, don't know enough nodes (members: ${m.config.members.size})...")
+    case Event(ElectionTimeout, m: ElectionMeta) =>
+      log.info("Voting timeout, unable to start election, don't know enough nodes (members: {})...", m.config.members.size)
       goto(Follower) using m.forFollower
 
     case Event(AskForState, _) =>

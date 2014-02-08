@@ -2,11 +2,10 @@ package pl.project13.scala.akka.raft
 
 import akka.actor.{Actor, ActorRef, LoggingFSM}
 import scala.concurrent.duration._
-import scala.util.Random
-import java.util.concurrent.TimeUnit
 
 import model._
 import protocol._
+import scala.concurrent.forkjoin.ThreadLocalRandom
 
 abstract class RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
   with ReplicatedStateMachine
@@ -21,23 +20,32 @@ abstract class RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
 
   private val ElectionTimeoutTimerName = "election-timer"
 
-  // todo rethink if needed
-  var electionTimeoutDieOn = 0L
+  /**
+   * Used in order to avoid starting elections when we process an timeout event (from the election-timer),
+   * which is immediatly followed by a message from the Leader.
+   * This is because timeout handling is just a plain old message (no priority implemented there).
+   *
+   * This means our election reaction to timeouts is relaxed a bit - yes, but this should be a good thing.
+   */
+  var electionDeadline: Deadline = 0.seconds.fromNow
 
-  // todo or move to Meta
+
+  // raft member state ---------------------
+
   var replicatedLog = ReplicatedLog.empty[Command](raftConfig.defaultAppendEntriesBatchSize)
+
+  var nextIndex = LogIndexMap.initialize(Set.empty, replicatedLog.lastIndex)
+
+  var matchIndex = LogIndexMap.initialize(Set.empty, -1)
+
+  // end of raft member state --------------
 
   val heartbeatInterval: FiniteDuration = raftConfig.heartbeatInterval
 
-  def nextElectionTimeout: FiniteDuration = randomElectionTimeout(
+  def nextElectionDeadline(): Deadline = randomElectionTimeout(
     from = raftConfig.electionTimeoutMin,
     to = raftConfig.electionTimeoutMax
-  )
-
-  // todo or move to Meta
-  var nextIndex = LogIndexMap.initialize(Set.empty, replicatedLog.lastIndex)
-  // todo or move to Meta
-  var matchIndex = LogIndexMap.initialize(Set.empty, -1)
+  ).fromNow
 
   override def preStart() {
     log.info("Starting new Raft member, will wait for raft cluster configuration...")
@@ -111,21 +119,19 @@ abstract class RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
 
   // helpers -----------------------------------------------------------------------------------------------------------
 
-  def cancelElectionTimeout() {
+  def cancelElectionDeadline() {
     cancelTimer(ElectionTimeoutTimerName)
   }
 
-    def resetElectionTimeout(): FiniteDuration = {
+  def resetElectionDeadline(): Deadline = {
     cancelTimer(ElectionTimeoutTimerName)
 
-    val timeout = nextElectionTimeout
-    val since = System.currentTimeMillis()
-    log.info(s"Resetting election timeout: $timeout (since:$since)")
+    electionDeadline = nextElectionDeadline()
+    log.debug("Resetting election timeout: {}", electionDeadline)
 
-    electionTimeoutDieOn = since + timeout.toMillis
-    setTimer(ElectionTimeoutTimerName, ElectionTimeout(since), timeout, repeat = false)
+    setTimer(ElectionTimeoutTimerName, ElectionTimeout, electionDeadline.timeLeft, repeat = false)
 
-    timeout
+    electionDeadline
   }
 
   private def randomElectionTimeout(from: FiniteDuration = 150.millis, to: FiniteDuration = 300.millis): FiniteDuration = {
@@ -133,39 +139,35 @@ abstract class RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
     val toMs = to.toMillis
     require(toMs > fromMs, s"to ($to) must be greater than from ($from) in order to create valid election timeout.")
 
-    (fromMs + Random.nextInt(toMs.toInt - fromMs.toInt)).millis
+    (fromMs + ThreadLocalRandom.current().nextInt(toMs.toInt - fromMs.toInt)).millis
   }
 
-  @inline private[raft] def electionTimeoutStillValid(since: Long) = {
-    val stillValid = electionTimeoutDieOn < System.currentTimeMillis()
+  // named state changes --------------------------------------------
 
-    if (stillValid)
-      log.info(s"Timeout reached (since: $since, ago: ${System.currentTimeMillis() - since})")
-
-    stillValid
-  }
-
-  // named state changes
   /** Start a new election */
   def beginElection(m: Meta) = {
-    resetElectionTimeout()
+    resetElectionDeadline()
 
     if (m.config.members.isEmpty) {
       // cluster is still discovering nodes, keep waiting
       goto(Follower) using m
     } else {
-      goto(Candidate) using m.forNewElection forMax nextElectionTimeout
+      goto(Candidate) using m.forNewElection forMax nextElectionDeadline().timeLeft
     }
   }
 
   /** Stop being the Leader */
-  def stepDown(m: LeaderMeta) = goto(Follower) using m.forFollower
+  def stepDown(m: LeaderMeta) = {
+    goto(Follower) using m.forFollower
+  }
 
   /** Stay in current state and reset the election timeout */
-  def stayAcceptingHeartbeat() = {
-    resetElectionTimeout()
+  def acceptHeartbeat() = {
+    resetElectionDeadline()
     stay()
   }
+
+  // end of named state changes -------------------------------------
 
   /** `true` if this follower is at `Term(2)`, yet the incoming term is `t > Term(3)` */
   def isInconsistentTerm(currentTerm: Term, term: Term): Boolean = term < currentTerm
@@ -177,8 +179,6 @@ abstract class RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
 
   @inline def voter() = sender() // not explicitly a Raft role, but makes it nice to read
   // end of sender aliases
-
-  private def simpleNames(refs: Iterable[ActorRef]) = refs.map(_.path.elements.last).mkString("{", ", ", "}")
 
 }
 

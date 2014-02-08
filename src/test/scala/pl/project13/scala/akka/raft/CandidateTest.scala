@@ -35,7 +35,7 @@ class CandidateTest extends RaftSpec with BeforeAndAfterEach
     subscribeBeginElection()
 
     candidate.setState(Candidate, data)
-    candidate.underlyingActor.resetElectionTimeout()
+    candidate.underlyingActor.resetElectionDeadline()
 
     // when
     awaitBeginElection()

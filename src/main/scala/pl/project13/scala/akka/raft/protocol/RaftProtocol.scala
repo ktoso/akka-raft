@@ -15,6 +15,11 @@ private[protocol] trait RaftProtocol extends Serializable {
   case class ClientMessage[T](@deprecated client: ActorRef, cmd: T) extends RaftMessage
 
 
+  /**
+   * Message sent by a [[pl.project13.scala.akka.raft.Candidate]] in order to win an election (and become [[pl.project13.scala.akka.raft.Leader]]).
+   *
+   * @see §5.2 Leader Election and §5.4.1 - Election Restriction
+   */
   case class RequestVote(
     term: Term,
     candidateId: ActorRef,
@@ -49,29 +54,43 @@ private[protocol] trait RaftProtocol extends Serializable {
     }
   }
 
+  /**
+   * Used by non-Leaders to notify [[pl.project13.scala.akka.raft.RaftClientActor]] actors that they're sending their requests to a non-leader, and
+   * that they should update their internal `leader` ActorRef to the given one.
+   *
+   * Upon receive of such message, all further communication should be done with the given actorRef.
+   *
+   * @see §8 - Client Interaction
+   */
+  case class LeaderIs(ref: Option[ActorRef]) extends Message[Raft]
+
 
   /**
-   * Raft extension: Snapshots (§7 Log Compaction)
+   * Raft extension: Snapshots
    * Used by the Leader to install a snapshot onto an "catching up from very behind" Follower.
    * It's the Followers responsibility to load the snapshot data and apply it to it's state machine, by using akka-persistence provided mechanisms.
+   *
+   * @see §7 - Log Compaction
    */
-  case class InstallSnapshot(snapshotMeta: RaftSnapshot)
+  case class InstallSnapshot(snapshotMeta: RaftSnapshot) extends Message[Raft]
 
 
   /**
-   * Used to initiate configuration transitions.
+   * Raft extension: Cluster Membership Changes / Joint Consensus
    *
    * There can take a while to propagate, and will only be applied when the config is passed on to all nodes,
    * and the Leader (current, or new) is contained in the new cluster configuration - this may cause a re-election,
    * if we're about to remove the current leader from the cluster.
    *
-   * For a detailed description see § 6 - Cluster Membership Changes, in the Raft whitepaper.
+   * @see §6 - Cluster Membership Changes
    */
   case class ChangeConfiguration(newConf: ClusterConfiguration) extends Message[Raft]
 
   /**
    * Message issued by freshly restarted actor after has crashed
    * Leader reacts with sending [[pl.project13.scala.akka.raft.protocol.RaftProtocol.ChangeConfiguration]]
-   * */
+   *
+   * @see §6 - Cluster Membership Changes
+   */
   case object RequestConfiguration extends Message[Internal]
 }

@@ -6,45 +6,56 @@ import model._
 import protocol._
 import cluster.ClusterProtocol.{IAmInState, AskForState}
 import scala.annotation.tailrec
+import akka.actor.ActorRef
 
 private[raft] trait Follower {
   this: RaftActor =>
 
   protected def raftConfig: RaftConfiguration
 
+  /** Used when a client contacts this Follower, instead of the Leader; so we redirect him to the Leader. */
+  var recentlyContactedByLeader: Option[ActorRef] = None 
+  
   val followerBehavior: StateFunction = {
+    // message from client, tell it about the last leader we've took a write from
+    case Event(msg: ClientMessage[Command], m: Meta) =>
+      log.info("Candidate got {} from client; Respond with last Leader that took write from: {}", msg, recentlyContactedByLeader)
+      sender() ! LeaderIs(recentlyContactedByLeader)
+      stay()
 
     // election
     case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: Meta)
       if m.canVoteIn(term) =>
 
-      log.info(s"Voting for $candidate in $term")
+      log.info("Voting for {} in {}", candidate, term)
       sender ! VoteCandidate(m.currentTerm)
 
       stay() using m.withVote(term, candidate)
 
     case Event(RequestVote(term, candidateId, lastLogTerm, lastLogIndex), m: Meta) =>
-      log.info(s"Rejecting vote for ${candidate()}, and $term, currentTerm: ${m.currentTerm}, already voted for: ${m.votes.get(term)}")
+      log.info("Rejecting vote for {}, and {}, currentTerm: {}, already voted for: {}", candidate(), term, m.currentTerm, m.votes.get(term))
       sender ! DeclineCandidate(m.currentTerm)
       stay()
 
     // end of election
 
-    // take write
+    // take writes
     case Event(msg: AppendEntries[Command], m: Meta) =>
+      senderIsCurrentLeader()
       appendEntries(msg, m)
 
-    // need to start an election
-    case Event(ElectionTimeout(since), m: Meta) =>
-      if (electionTimeoutStillValid(since))
-        beginElection(m)
-      else
-        stay()
+    // end of take writes
+
+    // timeout, may need to start an election
+    case Event(ElectionTimeout, m: Meta) =>
+      if (electionDeadline.isOverdue()) beginElection(m)
+      else stay()
 
     case Event(AskForState, _) =>
       sender() ! IAmInState(Follower)
       stay()
   }
+  
 
   def appendEntries(msg: AppendEntries[Command], m: Meta): State =
     if (leaderIsLagging(msg, m)) {
@@ -55,31 +66,24 @@ private[raft] trait Follower {
       stay()
 
     } else if (msg.isHeartbeat) {
-      stayAcceptingHeartbeat()
+      acceptHeartbeat()
 
-    } else { //if (replicatedLog.containsMatchingEntry(msg.prevLogTerm, msg.prevLogIndex)) {
-      log.info("Appending: " + msg.entries)
+    } else {
+      log.debug("Appending: " + msg.entries)
       leader ! append(msg.entries, m)
       replicatedLog = commitUntilLeadersIndex(m, msg)
       
       val meta = maybeUpdateConfiguration(m, msg.entries.map(_.command))
       val metaWithUpdatedTerm = meta.copy(currentTerm = replicatedLog.lastTerm)
-      stayAcceptingHeartbeat() using metaWithUpdatedTerm 
+      acceptHeartbeat() using metaWithUpdatedTerm
     }
-//    } else {
-//      log.info("Rejecting write of (does not contain matching entry): " + msg + "; " + replicatedLog)
-//      leader ! AppendRejected(m.currentTerm, replicatedLog.lastIndex)
-//
-//      stay()
-//    }
 
   def leaderIsLagging(msg: AppendEntries[Command], m: Meta): Boolean =
     msg.term < m.currentTerm
 
   def append(entries: immutable.Seq[Entry[Command]], m: Meta): AppendSuccessful = {
     val atIndex = entries.map(_.index).min
-//    log.debug("log before append: " + replicatedLog.entries)
-    log.debug(bold("executing: " + s"replicatedLog = replicatedLog.append($entries, $atIndex)"))
+    log.debug("executing: replicatedLog = replicatedLog.append({}, {})", entries, atIndex)
 
     replicatedLog = replicatedLog.append(entries, atIndex)
 //    log.debug("log after append: " + replicatedLog.entries)
@@ -106,8 +110,7 @@ private[raft] trait Follower {
     val entries = replicatedLog.between(replicatedLog.committedIndex, msg.leaderCommitId)
 
     entries.foldLeft(replicatedLog) { case (repLog, entry) =>
-      log.info(s"committing entry $entry on Follower, leader is committed until [${msg.leaderCommitId}]")
-      log.info("entry = " + entry)
+      log.debug("committing entry {} on Follower, leader is committed until [{}]", entry, msg.leaderCommitId)
 
       handleCommitIfSpecialEntry.applyOrElse(entry, handleNormalEntry)
 
@@ -124,8 +127,5 @@ private[raft] trait Follower {
       // simply ignore applying cluster configurations onto the client state machine,
       // it's an internal thing and the client does not care about cluster config change.
   }
-
-  // todo remove me
-  private def bold(msg: Any): String = Console.BOLD + msg.toString + Console.RESET
-
+  
 }

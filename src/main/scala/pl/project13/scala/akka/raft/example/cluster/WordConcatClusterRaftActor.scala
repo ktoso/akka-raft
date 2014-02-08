@@ -9,13 +9,13 @@ class WordConcatClusterRaftActor extends ClusterRaftActor {
 
    type Command = Cmnd
 
-   var words = ListBuffer[String]()
+   var words = Vector[String]()
 
    /** Called when a command is determined by Raft to be safe to apply */
    def apply = {
      case AppendWord(word) =>
-       words append word
-       log.info(s"Applied command [AppendWord($word)], full words is: $words")
+       words = words :+ word
+       log.info("Applied command [AppendWord({})], full words is: {}", word, words)
 
        word
 

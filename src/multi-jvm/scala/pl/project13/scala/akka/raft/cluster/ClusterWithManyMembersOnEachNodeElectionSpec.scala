@@ -4,7 +4,7 @@ import akka.testkit.ImplicitSender
 import concurrent.duration._
 import akka.cluster.ClusterEvent.{CurrentClusterState, MemberUp}
 import akka.cluster.Cluster
-import akka.actor.Props
+import akka.actor.{Address, Props}
 import pl.project13.scala.akka.raft.example.cluster.WordConcatClusterRaftActor
 import akka.util.Timeout
 import clusters._
@@ -27,15 +27,17 @@ abstract class ClusterWithManyMembersOnEachNodeElectionSpec extends RaftClusterS
 
   import ThreeNodesCluster._
 
+  lazy val firstAddress: Address = node(first).address
+  lazy val secondAddress: Address = node(second).address
+  lazy val thirdAddress: Address = node(third).address
+
   it should "elect a leader, from 5 members, on 3 nodes" in within(20.seconds) {
     Cluster(system).subscribe(testActor, classOf[MemberUp])
     expectMsgClass(classOf[CurrentClusterState])
 
-    val firstAddress = node(first).address
-    val secondAddress = node(second).address
-    val thirdAddress = node(third).address
-
     Cluster(system) join firstAddress
+    Cluster(system) join secondAddress
+    Cluster(system) join thirdAddress
 
     (1 to initialParticipants) map { idx =>
       runOn(nodes(idx)) {
@@ -51,13 +53,9 @@ abstract class ClusterWithManyMembersOnEachNodeElectionSpec extends RaftClusterS
       system.actorOf(Props[WordConcatClusterRaftActor], "member-5")
     }
 
-    receiveN(3).collect { case MemberUp(m) => m.address }.toSet should be(
-      Set(firstAddress, secondAddress, thirdAddress)
-    )
+    testConductor.enter("started-additional-members")
 
     Cluster(system).unsubscribe(testActor)
-
-    testConductor.enter("all-nodes-up")
 
     val member1 = selectActorRef(firstAddress,  1)
     val member2 = selectActorRef(secondAddress, 2)

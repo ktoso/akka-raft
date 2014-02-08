@@ -134,10 +134,10 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
   // await stuff -------------------------------------------------------------------------------------------------------
 
   def subscribeElectedLeader()(implicit probe: TestProbe): Unit =
-    system.eventStream.subscribe(probe.ref, classOf[ElectedAsLeader])
+    system.eventStream.subscribe(probe.ref, ElectedAsLeader.getClass)
 
   def awaitElectedLeader(max: FiniteDuration = 5.seconds)(implicit probe: TestProbe): Unit =
-    probe.expectMsgClass(max, classOf[ElectedAsLeader])
+    probe.expectMsgClass(max, ElectedAsLeader.getClass)
 
   def subscribeBeginElection()(implicit probe: TestProbe): Unit =
     system.eventStream.subscribe(probe.ref, BeginElection.getClass)

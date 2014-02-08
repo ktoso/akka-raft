@@ -20,7 +20,7 @@ trait ClusterRaftActor extends RaftActor {
 
   import context.dispatcher
   
-  implicit val timeout = Timeout(2.seconds)
+  implicit val timeout = Timeout(2.seconds) // todo make configurable via config
 
   abstract override def preStart(): Unit = {
     super.preStart()
@@ -37,11 +37,12 @@ trait ClusterRaftActor extends RaftActor {
     // members joining
     case MemberUp(member) =>
         log.info("Node is Up: {}, selecting and adding actors to Raft cluster..", member.address)
+        // todo make naming configurable
         val memberSelection = context.actorSelection(RootActorPath(member.address) / "user" / "member-*")
         memberSelection ! Identify(member.address)
 
     case ActorIdentity(address, Some(raftActorRef)) =>
-      log.info(s"Adding actor {} to Raft cluster, from address: {}", raftActorRef, address)
+      log.info("Adding actor {} to Raft cluster, from address: {}", raftActorRef, address)
       self ! RaftMemberAdded(raftActorRef)
 
     case ActorIdentity(address, None) =>

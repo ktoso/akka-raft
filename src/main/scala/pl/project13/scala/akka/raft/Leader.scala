@@ -16,8 +16,8 @@ private[raft] trait Leader {
   private val HeartbeatTimerName = "heartbeat-timer"
 
   val leaderBehavior: StateFunction = {
-    case Event(ElectedAsLeader(), m: LeaderMeta) =>
-      log.info(bold(s"Became leader for ${m.currentTerm}"))
+    case Event(ElectedAsLeader, m: LeaderMeta) =>
+      log.info("Became leader for {}", m.currentTerm)
       initializeLeaderState(m.config.members)
       startHeartbeat(m)
       stay()
@@ -32,14 +32,14 @@ private[raft] trait Leader {
 
     // client request
     case Event(ClientMessage(client, cmd: Command), m: LeaderMeta) =>
-      log.info(s"Appending command: [${bold(cmd)}] from $client to replicated log...")
+      log.info("Appending command: [{}] from {} to replicated log...", cmd, client)
 
       val entry = Entry(cmd, m.currentTerm, replicatedLog.nextIndex, Some(client))
 
-      log.info(s"adding to log: $entry")
+      log.debug("adding to log: {}", entry)
       replicatedLog += entry
       matchIndex.put(self, entry.index)
-      log.info(s"log status = $replicatedLog")
+      log.debug("log status = {}", replicatedLog)
 
       val meta = maybeUpdateConfiguration(m, entry.command)
       replicateLog(meta)
@@ -69,7 +69,7 @@ private[raft] trait Leader {
   }
 
   def initializeLeaderState(members: Set[Member]) {
-    log.info(s"Preparing nextIndex and matchIndex table for followers, init all to: replicatedLog.lastIndex = ${replicatedLog.lastIndex}")
+    log.info("Preparing nextIndex and matchIndex table for followers, init all to: replicatedLog.lastIndex = {}", replicatedLog.lastIndex)
     nextIndex = LogIndexMap.initialize(members, replicatedLog.lastIndex)
     matchIndex = LogIndexMap.initialize(members, -1)
   }
@@ -90,7 +90,7 @@ private[raft] trait Leader {
   def startHeartbeat(m: LeaderMeta) {
 //  def startHeartbeat(currentTerm: Term, members: Set[ActorRef]) {
     sendHeartbeat(m)
-    log.info(s"Starting hearbeat, with interval: $heartbeatInterval")
+    log.info("Starting hearbeat, with interval: {}", heartbeatInterval)
     setTimer(HeartbeatTimerName, SendHeartbeat, heartbeatInterval, repeat = true)
   }
 
@@ -102,12 +102,12 @@ private[raft] trait Leader {
   def replicateLog(m: LeaderMeta) {
     m.others foreach { member =>
       // todo remove me
-      log.info(s"""sending : ${AppendEntries(
-              m.currentTerm,
-              replicatedLog,
-              fromIndex = nextIndex.valueFor(member),
-              leaderCommitId = replicatedLog.committedIndex
-            )} to $member""")
+      log.debug("sending: {} to {}", AppendEntries(
+        m.currentTerm,
+        replicatedLog,
+        fromIndex = nextIndex.valueFor(member),
+        leaderCommitId = replicatedLog.committedIndex
+      ), member)
 
       member ! AppendEntries(
         m.currentTerm,
@@ -121,7 +121,7 @@ private[raft] trait Leader {
   def registerAppendRejected(member: ActorRef, msg: AppendRejected, m: LeaderMeta) = {
     val AppendRejected(followerTerm, followerIndex) = msg
 
-    log.info(s"Follower ${follower()} rejected write: $followerTerm @ $followerIndex, back out the first index in this term and retry")
+    log.info("Follower {} rejected write: {} @ {}, back out the first index in this term and retry", follower(), followerTerm, followerIndex)
 //    log.info(s"Leader log state: " + replicatedLog.entries)
 
     nextIndex.putIfSmaller(follower(), followerIndex)
@@ -135,7 +135,7 @@ private[raft] trait Leader {
   def registerAppendSuccessful(member: ActorRef, msg: AppendSuccessful, m: LeaderMeta) = {
     val AppendSuccessful(followerTerm, followerIndex) = msg
 
-    log.info(s"Follower ${follower()} took write in term: $followerTerm, index: ${nextIndex.valueFor(follower())}")
+    log.info("Follower {} took write in term: {}, index: {}", follower(), followerTerm, nextIndex.valueFor(follower()))
 
     // update our tables for this member
     nextIndex.put(follower(), followerIndex)
@@ -149,7 +149,7 @@ private[raft] trait Leader {
   def maybeCommitEntry(m: LeaderMeta, matchIndex: LogIndexMap, replicatedLog: ReplicatedLog[Command]): ReplicatedLog[Command] = {
     val indexOnMajority = matchIndex.consensusForIndex(m.config)
     val willCommit = indexOnMajority > replicatedLog.committedIndex
-    log.info(s"Consensus for persisted index: $indexOnMajority. (Comitted index: ${replicatedLog.committedIndex}, will commit now: $willCommit)")
+    log.info("Consensus for persisted index: {}. (Comitted index: {}, will commit now: {})", indexOnMajority, replicatedLog.committedIndex, willCommit)
 
     if (willCommit) {
       val entries = replicatedLog.between(replicatedLog.committedIndex, indexOnMajority)
@@ -158,7 +158,7 @@ private[raft] trait Leader {
         handleCommitIfSpecialEntry.applyOrElse(entry, default = handleNormalEntry)
 
         if (raftConfig.publishTestingEvents) {
-          log.info(s"Publishing EntryCommitted(${entry.index})")
+          log.info("Publishing EntryCommitted({})", entry.index)
           context.system.eventStream.publish(EntryCommitted(entry.index))
         }
       }
@@ -185,7 +185,7 @@ private[raft] trait Leader {
 
   private val handleNormalEntry: PartialFunction[Any, Unit] = {
     case entry: Entry[Command] =>
-      log.info(s"Committing log at index: ${entry.index}; Applying command: ${entry.command}, will send result to client: ${entry.client}")
+      log.info("Committing log at index: {}; Applying command: {}, will send result to client: {}", entry.index, entry.command, entry.client)
       val result = apply(entry.command) // todo what if we apply a message the actor didnt understand? should fail "nicely"
       entry.client foreach { _ ! result }
   }
@@ -202,8 +202,5 @@ private[raft] trait Leader {
     case _ =>
       meta
   }
-
-  // todo remove me
-  private def bold(msg: Any): String = Console.BOLD + msg.toString + Console.RESET
 
 }

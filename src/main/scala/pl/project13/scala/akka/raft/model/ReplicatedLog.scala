@@ -12,7 +12,7 @@ case class ReplicatedLog[Command](
   defaultBatchSize: Int
 ) {
 
-  def commands = entries.map(_.command)
+  def commands: List[Command] = entries.map(_.command)
 
   /**
    * Performs the "consistency check", which checks if the data that we just got from the

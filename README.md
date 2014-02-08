@@ -5,9 +5,9 @@ akka-raft
 
 This is an akka based implementation of the Raft consensus algorithm.
 
-It is akka-cluster (which is _experimental_) aware, and supports the additional features of raft such as: mambership changes and (_not yet_) snapshotting.
+It is **akka-cluster** aware, and supports the additional features of raft such as: mambership changes and (_not yet_) snapshotting.
 
-**This is still work in progress and has not been stress tested (athough it is tested on multiple nodes already)**
+<span style="color:red; font-weight:bold">This is still work in progress and has not been stress tested (athough it is tested on multiple nodes already)</span>
 
 Basic info
 ===========
@@ -22,7 +22,7 @@ class WordConcatRaftActor extends RaftActor {
 
   type Command = Cmnd
 
-  var words = ListBuffer[String]()
+  var words = Vector[String]()
 
   /** 
    * Called when a command is determined by Raft to be safe to apply; 
@@ -30,14 +30,15 @@ class WordConcatRaftActor extends RaftActor {
    */
   def apply(command: Cmnd): Any = command match { // todo this api might change into a more "actor-like" one!
     case AppendWord(word) =>
-      words append word
-      log.info(s"Applied command [$command], full words is: $words")
+      words +: word
+      log.info("Applied command [{}], full words is: {}", command, words)
 
       word
 
     case GetWords =>
-      log.info("Replying with {}", words.toList)
-      words.toList
+      val res = words.toList
+      log.info("Replying with {}", res)
+      res
   }
 }
 
