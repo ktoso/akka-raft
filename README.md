@@ -28,7 +28,7 @@ class WordConcatRaftActor extends RaftActor {
    * Called when a command is determined by Raft to be safe to apply; 
    * Application results are sent back to the client issuing the command.
    */
-  def apply(command: Cmnd): Any = command match { // todo this api might change into a more "actor-like" one!
+  def apply = { 
     case AppendWord(word) =>
       words +: word
       log.info("Applied command [{}], full words is: {}", command, words)
