@@ -118,6 +118,9 @@ private[raft] trait Follower {
     }
   }
 
+  private def senderIsCurrentLeader(): Unit =
+    recentlyContactedByLeader = Some(sender())
+  
   private val handleNormalEntry: PartialFunction[Any, Unit] = {
     case entry: Entry[Command] => apply(entry.command)
   }

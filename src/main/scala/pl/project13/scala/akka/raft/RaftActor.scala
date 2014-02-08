@@ -8,7 +8,7 @@ import protocol._
 import scala.concurrent.forkjoin.ThreadLocalRandom
 
 abstract class RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
-  with ReplicatedStateMachine
+  with ReplicatedStateMachine with RaftClusterMembershipBehavior
   with Follower with Candidate with Leader {
 
   type Command
@@ -61,53 +61,17 @@ abstract class RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
 
   when(Leader)(leaderBehavior orElse clusterManagementBehavior)
 
-  /** Waits for initial cluster configuration. Step needed before we can start voting for a Leader. */
-  lazy val awaitInitialConfigurationBehavior: StateFunction = {
-    case Event(ChangeConfiguration(initialConfig), m: Meta) =>
-      log.info(s"Applying initial raft cluster configuration. Consists of [{}] nodes: {}",
-        initialConfig.members.size,
-        initialConfig.members.map(_.path.elements.last).mkString("{", ", ", "}"))
-
-      val timeout = resetElectionTimeout()
-      log.info("Finished init of new Raft member, becoming Follower. Initial election timeout: " + timeout)
-      goto(Follower) using m.copy(config = initialConfig)
-
-    case Event(msg: AppendEntries[Command], m: Meta) =>
-      log.info("Got message from a Leader, but am in Init state. Will ask for it's configuration and join Raft cluster.")
-      leader() ! RequestConfiguration
-      stay()
-  }
-
-  /** Handles adding / removing raft members; Should be handled in every state */
-  lazy val clusterManagementBehavior: StateFunction = {
-    // enter joint consensus phase of configuration comitting
-    case Event(ChangeConfiguration(newConfiguration), m: Metadata) =>
-      val transitioningConfig = m.config transitionTo newConfiguration
-
-      log.info(s"Starting transition to new Configuration, " +
-        s"old [size: ${m.config.members.size}]: ${simpleNames(m.config.members)}, " +
-        s"migrating to [size: ${transitioningConfig.transitionToStable.members.size}]: $transitioningConfig")
-
-      // configuration change goes over the same process as log appending
-      // here we initiate the 1st phase - committing the "joint consensus config", which includes all nodes from these configs
-      // the 2nd phase is initiated upon committing of this entry to the log.
-      // Once the new config is committed, nodes that are not included can step-down
-      self ! ClientMessage(self, transitioningConfig)
-
-      stay()
-  }
-
   onTransition {
     case Follower -> Candidate =>
       self ! BeginElection
-      resetElectionTimeout()
+      resetElectionDeadline()
 
     case Candidate -> Leader =>
-      self ! ElectedAsLeader()
-      cancelElectionTimeout()
+      self ! ElectedAsLeader
+      cancelElectionDeadline()
 
     case _ -> Follower =>
-      resetElectionTimeout()
+      resetElectionDeadline()
   }
 
   onTermination {

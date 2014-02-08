@@ -19,77 +19,25 @@ class NonLeaderInteractionTest extends RaftSpec(callingThreadDispatcher = false)
 
   val client = TestProbe()
 
-  it should "apply the state machine in expected order" in {
-    // given
+  it should "allow contacting a non-leader member, which should respond with the Leader's ref" in {
+    Given("A leader is elected")
     subscribeElectedLeader()
     awaitElectedLeader()
     infoMemberStates()
 
-    // when
-    leader ! ClientMessage(client.ref, AppendWord("I"))       // 0
-    leader ! ClientMessage(client.ref, AppendWord("like"))    // 1
-    leader ! ClientMessage(client.ref, AppendWord("bananas")) // 2
-    leader ! ClientMessage(client.ref, GetWords)              // 3
+    val msg = ClientMessage(client.ref, AppendWord("test"))
 
-    // then
-    client.expectMsg(timeout, "I")
-    client.expectMsg(timeout, "like")
-    client.expectMsg(timeout, "bananas")
+    When("The client sends a write message to a non-leader member")
+    followers().head ! msg
 
-    val got = client.expectMsg(timeout, List("I", "like", "bananas"))
-    info("Final replicated state machine state: " + got)
-  }
+    Then("That non-leader, should respons with the leader's ref")
+    val leaderIs = expectMsgType[LeaderIs](max = 1.second)
 
+    When("The client contact that member")
+    leaderIs.ref.get ! msg
 
-  it should "replicate the missing entries to Follower which was down for a while" in {
-    // given
-    infoMemberStates()
-
-    subscribeEntryComitted()
-
-    // when
-    val failingMembers = followers().take(3)
-    val initialLeader = leader()
-    initialLeader ! ChangeConfiguration(ClusterConfiguration(members().toSet -- failingMembers)) // 4, 5
-    failingMembers foreach killMember
-
-    awaitEntryComitted(5)
-    infoMemberStates()
-
-    initialLeader ! ClientMessage(client.ref, AppendWord("and"))    // 6
-    initialLeader ! ClientMessage(client.ref, AppendWord("apples")) // 7
-
-    // during this time it should not be able to respond...
-    val revivedMembers = failingMembers.take(2)
-    revivedMembers foreach restartMember
-
-    val allMembers = members() ++ revivedMembers
-    // actualy only the leader, and the failingMembers care
-    allMembers foreach { _ ! ChangeConfiguration(ClusterConfiguration(allMembers)) } // 8, 9
-
-    awaitEntryComitted(9)
-    infoMemberStates()
-
-    initialLeader ! ClientMessage(client.ref, AppendWord("!"))      // 10
-    awaitEntryComitted(10)
-
-    // then
-    // after all nodes came online again, raft should have been able to commit the messages!
-    eventually {
-      client.expectMsg(timeout, "and")
-      client.expectMsg(timeout, "apples")
-      client.expectMsg(timeout, "!")
-    }
-
-    Thread.sleep(1000)
-    eventually {
-      val logs = members() map { _.underlyingActor.replicatedLog.entries }
-
-      logs(0) === logs(1)
-      logs(1) === logs(2)
-      logs(2) === logs(3)
-      info("Logs of all Raft members are equal!")
-    }
+    Then("The leader should take the write")
+    client.expectMsg(timeout, "test")
   }
 
 }
