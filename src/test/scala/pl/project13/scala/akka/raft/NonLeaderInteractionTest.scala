@@ -20,7 +20,7 @@ class NonLeaderInteractionTest extends RaftSpec(callingThreadDispatcher = false)
   val client = TestProbe()
 
   it should "allow contacting a non-leader member, which should respond with the Leader's ref" in {
-    Given("A leader is elected")
+    Given("a leader is elected")
     subscribeElectedLeader()
     awaitElectedLeader()
     infoMemberStates()
@@ -28,18 +28,18 @@ class NonLeaderInteractionTest extends RaftSpec(callingThreadDispatcher = false)
     val msg = ClientMessage(client.ref, AppendWord("test"))
 
     val follower = followers().head
-    When(s"The client sends a write message to a non-leader member (${simpleName(follower)})")
+    When(s"the client sends a write message to a non-leader member (${simpleName(follower)})")
     follower ! msg
 
-    Then("That non-leader, should respons with the leader's ref")
+    Then("that non-leader, should respons with the leader's ref")
     val leaderIs = eventually {
       expectMsgType[LeaderIs].ref.get // we ask until we get the leader back
     }
 
-    When("The client contact that member")
+    When("the client contact that member")
     leaderIs ! msg
 
-    Then("The leader should take the write")
+    Then("the leader should take the write")
     client.expectMsg(timeout, "test")
   }
 

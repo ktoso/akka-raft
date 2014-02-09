@@ -89,9 +89,11 @@ class LogCompactionTest extends RaftSpec(callingThreadDispatcher = false)
     client.expectMsg(timeout, List("I", "like", "bananas"))
     client.expectMsg(timeout, List("I", "like", "bananas"))
 
-    val log = leader().underlyingActor.replicatedLog
+    eventually {
+      val log = leader().underlyingActor.replicatedLog
 
-    log.entries should have length 1 // compaction actually worked
+      log.entries should have length 1 // compaction actually worked
+    }
   }
 
   it should "allow taking an InstallSnapshot from a leader" in {

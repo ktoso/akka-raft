@@ -18,6 +18,8 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
 
   import protocol._
 
+  val DefaultTimeout = 10.seconds // slow
+  
   // notice the EventStreamAllMessages, thanks to this we're able to wait for messages like "leader elected" etc.
   protected var _members: Vector[TestFSMRef[RaftState, Metadata, SnapshottingWordConcatRaftActor]] = Vector.empty
 
@@ -136,19 +138,19 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
   def subscribeElectedLeader()(implicit probe: TestProbe): Unit =
     system.eventStream.subscribe(probe.ref, ElectedAsLeader.getClass)
 
-  def awaitElectedLeader(max: FiniteDuration = 5.seconds)(implicit probe: TestProbe): Unit =
+  def awaitElectedLeader(max: FiniteDuration = DefaultTimeout)(implicit probe: TestProbe): Unit =
     probe.expectMsgClass(max, ElectedAsLeader.getClass)
 
   def subscribeBeginElection()(implicit probe: TestProbe): Unit =
     system.eventStream.subscribe(probe.ref, BeginElection.getClass)
 
-  def awaitBeginElection(max: FiniteDuration = 5.seconds)(implicit probe: TestProbe): Unit =
+  def awaitBeginElection(max: FiniteDuration = DefaultTimeout)(implicit probe: TestProbe): Unit =
     probe.expectMsgClass(max, BeginElection.getClass)
 
   def subscribeEntryComitted()(implicit probe: TestProbe): Unit =
     system.eventStream.subscribe(probe.ref, classOf[EntryCommitted])
 
-  def awaitEntryComitted(Index: Int, max: FiniteDuration = 5.seconds)(implicit probe: TestProbe): Unit = {
+  def awaitEntryComitted(Index: Int, max: FiniteDuration = DefaultTimeout)(implicit probe: TestProbe): Unit = {
     val start = System.currentTimeMillis()
     probe.fishForMessage(max, hint = s"EntryCommitted($Index)") {
       case EntryCommitted(Index) =>
