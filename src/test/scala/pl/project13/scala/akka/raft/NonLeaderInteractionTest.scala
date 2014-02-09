@@ -15,7 +15,7 @@ class NonLeaderInteractionTest extends RaftSpec(callingThreadDispatcher = false)
 
   val initialMembers = 5
 
-  val timeout = 2.second
+  val timeout = 3.second
 
   val client = TestProbe()
 
@@ -33,7 +33,7 @@ class NonLeaderInteractionTest extends RaftSpec(callingThreadDispatcher = false)
 
     Then("That non-leader, should respons with the leader's ref")
     val leaderIs = eventually {
-      expectMsgType[LeaderIs](max = 1.second).ref.get // we ask until we get the leader back
+      expectMsgType[LeaderIs].ref.get // we ask until we get the leader back
     }
 
     When("The client contact that member")
