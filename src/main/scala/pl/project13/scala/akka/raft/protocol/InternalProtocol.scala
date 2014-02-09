@@ -25,9 +25,13 @@ private[protocol] trait InternalProtocol extends Serializable {
   case class AppendRejected(term: Term, lastIndex: Int)   extends AppendResponse
   case class AppendSuccessful(term: Term, lastIndex: Int) extends AppendResponse
 
+  /** Internal msg sent to actor which should start a snapshotting process */
+  case object InitLogSnapshot extends Message[Internal]
+
   case object SendHeartbeat extends LeaderMessage
 
   // ----    testing and monitoring messages     ----
   case class EntryCommitted(idx: Int) extends Message[Testing]
+  case class SnapshotWritten(initialSize: Int, compactedSize: Int) extends Message[Testing]
   // ---- end of testing and monitoring messages ----
 }

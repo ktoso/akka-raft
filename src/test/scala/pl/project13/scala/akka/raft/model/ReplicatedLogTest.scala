@@ -262,7 +262,7 @@ class ReplicatedLogTest extends FlatSpec with Matchers
     initialEntry.head should equal (firstEntry)
   }
 
-  "dropCompacted" should "" in {
+  "compactedWith" should "compact the log" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String](1)
     (1 to 21) foreach { i =>

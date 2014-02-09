@@ -14,7 +14,7 @@ class LeaderTest extends TestKit(ActorSystem("test-system")) with FlatSpecLike w
 
   behavior of "Leader"
 
-  val leader = TestFSMRef(new WordConcatRaftActor)
+  val leader = TestFSMRef(new SnapshottingWordConcatRaftActor)
 
   var data: LeaderMeta = _
   

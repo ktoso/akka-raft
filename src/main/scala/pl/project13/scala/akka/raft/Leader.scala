@@ -158,8 +158,9 @@ private[raft] trait Leader {
         handleCommitIfSpecialEntry.applyOrElse(entry, default = handleNormalEntry)
 
         if (raftConfig.publishTestingEvents) {
-          log.info("Publishing EntryCommitted({})", entry.index)
-          context.system.eventStream.publish(EntryCommitted(entry.index))
+          val committed = EntryCommitted(entry.index)
+          log.info("Publishing {}", committed)
+          context.system.eventStream.publish(committed)
         }
       }
 

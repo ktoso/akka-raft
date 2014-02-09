@@ -19,7 +19,7 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
   import protocol._
 
   // notice the EventStreamAllMessages, thanks to this we're able to wait for messages like "leader elected" etc.
-  private var _members: Vector[TestFSMRef[RaftState, Metadata, WordConcatRaftActor]] = Vector.empty
+  protected var _members: Vector[TestFSMRef[RaftState, Metadata, SnapshottingWordConcatRaftActor]] = Vector.empty
 
   def initialMembers: Int
 
@@ -46,15 +46,15 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
    * > Use the "real" one for feature tests, so actors won't block each other in the CallingThread.
    * > Use the CallingThreadDispatcher for FSM tests, such as [[pl.project13.scala.akka.raft.CandidateTest]]
    */
-  def createActor(name: String): TestFSMRef[RaftState, Metadata, WordConcatRaftActor] = {
+  def createActor(name: String): TestFSMRef[RaftState, Metadata, SnapshottingWordConcatRaftActor] = {
     val actor =
       if (callingThreadDispatcher)
         TestFSMRef(
-          (new WordConcatRaftActor with EventStreamAllMessages).asInstanceOf[WordConcatRaftActor], // hack, bleh
+          (new WordConcatRaftActor with EventStreamAllMessages).asInstanceOf[SnapshottingWordConcatRaftActor], // hack, bleh
           name = name
         )
       else
-        TestFSMRefHack[RaftState, Metadata, WordConcatRaftActor](
+        TestFSMRefHack[RaftState, Metadata, SnapshottingWordConcatRaftActor](
           Props(new WordConcatRaftActor with EventStreamAllMessages).withDispatcher("raft-dispatcher"),
           name = name
         )
@@ -114,7 +114,7 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
     leaderToStop
   }
 
-  def killMember(member: TestFSMRef[RaftState, Metadata, WordConcatRaftActor]) = {
+  def killMember(member: TestFSMRef[RaftState, Metadata, SnapshottingWordConcatRaftActor]) = {
     system stop member
     _members = _members filterNot { _ == member }
     info(s"Killed member: ${simpleName(member)}")
@@ -123,7 +123,7 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
     member
   }
 
-  def restartMember(member: TestFSMRef[RaftState, Metadata, WordConcatRaftActor]) = {
+  def restartMember(member: TestFSMRef[RaftState, Metadata, SnapshottingWordConcatRaftActor]) = {
     createActor(member.path.elements.last)
     info(s"Started member: ${simpleName(member)}")
     Thread.sleep(10)

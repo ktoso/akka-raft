@@ -7,10 +7,11 @@ import scala.annotation.switch
  * @param defaultBatchSize number of commands that can be sent together in one [[pl.project13.scala.akka.raft.protocol.RaftProtocol.AppendEntries]] message.
  */
 case class ReplicatedLog[Command](
-  private[raft] entries: List[Entry[Command]],
+  private[raft] val entries: List[Entry[Command]],
   committedIndex: Int,
-  defaultBatchSize: Int
-) {
+  defaultBatchSize: Int) {
+
+  def length = entries.length
 
   def commands: List[Command] = entries.map(_.command)
 
@@ -26,7 +27,7 @@ case class ReplicatedLog[Command](
 
   def prevIndex = (lastIndex: @switch) match {
     case 0 => 0 // special handling of initial case, we don't go into negative indexes
-    case n => n -1
+    case n => n - 1
   }
   def prevTerm  = if (entries.size < 2) Term(0) else entries.dropRight(1).last.term
 
@@ -103,7 +104,7 @@ case class ReplicatedLog[Command](
 
   def termAt(index: Int) =
     if (index <= 0) Term(0)
-    else entries(index).term
+    else entries.find(_.index == index).getOrElse(throw new RuntimeException(s"Unable to find log entry at index $index")).term
 
   def committedEntries = entries.slice(0, committedIndex)
 
@@ -139,5 +140,7 @@ case class Entry[T](
 trait SnapshotEntry {
   this: Entry[_] =>
   def data: Any = command
+
   override def isSnapshot = true
+  override def toString = "Snapshot" + super.toString
 }

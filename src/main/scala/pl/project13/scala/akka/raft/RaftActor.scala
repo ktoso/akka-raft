@@ -6,10 +6,11 @@ import scala.concurrent.duration._
 import model._
 import protocol._
 import scala.concurrent.forkjoin.ThreadLocalRandom
+import pl.project13.scala.akka.raft.compaction.LogCompactionExtension
 
 abstract class RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
-  with ReplicatedStateMachine with RaftClusterMembershipBehavior
-  with Follower with Candidate with Leader {
+  with ReplicatedStateMachine
+  with Follower with Candidate with Leader with SharedBehaviors {
 
   type Command
   type Member = ActorRef
@@ -17,6 +18,8 @@ abstract class RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
   private val config = context.system.settings.config
 
   protected val raftConfig = RaftConfiguration(config)
+
+  protected val logCompaction = LogCompactionExtension(context.system)
 
   private val ElectionTimeoutTimerName = "election-timer"
 
@@ -55,11 +58,11 @@ abstract class RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
 
   when(Init)(awaitInitialConfigurationBehavior)
 
-  when(Follower)(followerBehavior orElse clusterManagementBehavior)
+  when(Follower)(followerBehavior orElse snapshottingBehavior orElse clusterManagementBehavior)
 
-  when(Candidate)(candidateBehavior orElse clusterManagementBehavior)
+  when(Candidate)(candidateBehavior orElse snapshottingBehavior orElse clusterManagementBehavior)
 
-  when(Leader)(leaderBehavior orElse clusterManagementBehavior)
+  when(Leader)(leaderBehavior orElse snapshottingBehavior orElse clusterManagementBehavior)
 
   onTransition {
     case Follower -> Candidate =>
@@ -98,7 +101,7 @@ abstract class RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
     electionDeadline
   }
 
-  private def randomElectionTimeout(from: FiniteDuration = 150.millis, to: FiniteDuration = 300.millis): FiniteDuration = {
+  private def randomElectionTimeout(from: FiniteDuration, to: FiniteDuration): FiniteDuration = {
     val fromMs = from.toMillis
     val toMs = to.toMillis
     require(toMs > fromMs, s"to ($to) must be greater than from ($from) in order to create valid election timeout.")

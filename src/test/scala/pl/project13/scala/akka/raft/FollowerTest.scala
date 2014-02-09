@@ -13,7 +13,7 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
 
   behavior of "Follower"
 
-  val follower = TestFSMRef(new WordConcatRaftActor)
+  val follower = TestFSMRef(new SnapshottingWordConcatRaftActor)
 
   var data: Meta = _
   

@@ -72,7 +72,7 @@ private[protocol] trait RaftProtocol extends Serializable {
    *
    * @see §7 - Log Compaction
    */
-  case class InstallSnapshot(snapshotMeta: RaftSnapshot) extends Message[Raft]
+  case class InstallSnapshot(snapshot: RaftSnapshot) extends Message[Raft]
 
 
   /**
