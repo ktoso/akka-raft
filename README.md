@@ -74,7 +74,7 @@ expectMsg(List("I", "like", "capybaras"))
 And if you want to enable snapshotting support it's as simple as implementing one method and matching for `InstallSnapshot`
 in your Actor:
 
-```
+```scala
 class SnapshottingWordConcatRaftActor extends RaftActor {
 
   type Command = Cmnd
