@@ -26,6 +26,8 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
         currentTerm = Term(2),
         config = ClusterConfiguration(self)
       )
+
+    follower.underlyingActor.resetElectionDeadline()
   }
 
   it should "reply with Vote if Candidate has later Term than it" in {

@@ -49,6 +49,19 @@ private[raft] trait Leader {
       else
         goto(Follower) using meta.forFollower // or maybe goto something else?
 
+    // rogue Leader handling
+    case Event(append: AppendEntries[Command], m: LeaderMeta) if append.term > m.currentTerm =>
+      log.info("Leader (@ {}) got AppendEntries from fresher Leader (@ {}), will step down and the Leader will keep being: {}", m.currentTerm, append.term, sender())
+      stepDown(m)
+
+    case Event(append: AppendEntries[Command], m: LeaderMeta) if append.term <= m.currentTerm =>
+      log.warning("Leader (@ {}) got AppendEntries from rogue Leader (@ {}), which is not fresher than this one. Will send entries to {}, to force it to step down.", m.currentTerm, append.term, sender())
+      sendEntries(sender(), m)
+      stay()
+    // end of rogue Leader handling
+
+    // append entries response handling
+
     case Event(AppendRejected(term, index), m: LeaderMeta) if term > m.currentTerm =>
       stopHeartbeat()
       stepDown(m) // since there seems to be another leader!

@@ -50,9 +50,11 @@ class ClusterMembershipChangeTest extends RaftSpec(callingThreadDispatcher = fal
 
     additionalActor.stateName should equal (Follower)
 
-    leaderCount should have length 1
-    candidateCount should have length 0
-    followerCount should have length 5
+    eventually {
+      leaderCount should have length 1
+      candidateCount should have length 0
+      followerCount should have length 5
+    }
 
     info("After adding member-6, and configuration change: ")
     infoMemberStates()

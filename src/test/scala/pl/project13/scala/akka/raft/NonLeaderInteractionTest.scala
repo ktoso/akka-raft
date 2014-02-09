@@ -15,7 +15,7 @@ class NonLeaderInteractionTest extends RaftSpec(callingThreadDispatcher = false)
 
   val initialMembers = 5
 
-  val timeout = 3.second
+  val timeout = 5.second
 
   val client = TestProbe()
 
