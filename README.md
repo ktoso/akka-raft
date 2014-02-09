@@ -120,5 +120,5 @@ We have discussed this paper both in Kraków and London, on these _awesome_ read
 * [Software Craftsmanship Kraków - SCKRK.com](http://www.meetup.com/sc-krk/events/134500362/)
 * [Paper Cup - the reading club - London](http://www.meetup.com/Paper-Cup/events/153170202/)
 
-![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/ktoso/akka-raft/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
+[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/ktoso/akka-raft/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
 
