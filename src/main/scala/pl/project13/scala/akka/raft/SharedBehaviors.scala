@@ -62,6 +62,11 @@ trait SharedBehaviors {
           log.debug("No snapshot data obtained, skipping snapshotting...")
       }
 
+      snapshotFuture onFailure {
+        case ex: Throwable =>
+          log.error("Unable to prepare snapshot!", ex)
+      }
+
       stay()
 
     // logically only a Follower should take such write, keeping handling in SharedBehaviors though, as it's more nicely grouped here - by feature

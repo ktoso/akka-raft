@@ -21,7 +21,7 @@ private[raft] trait Candidate {
     // election
     case Event(BeginElection, m: ElectionMeta) =>
       if (m.config.members.isEmpty) {
-        log.info("Tried to initialize election with no members...")
+        log.warning("Tried to initialize election with no members...")
         goto(Follower) using m.forFollower
       } else {
         log.info("Initializing election (among {} nodes) for {}", m.config.members.size, m.currentTerm)

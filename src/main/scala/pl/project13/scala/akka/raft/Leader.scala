@@ -122,7 +122,6 @@ private[raft] trait Leader {
     val AppendRejected(followerTerm, followerIndex) = msg
 
     log.info("Follower {} rejected write: {} @ {}, back out the first index in this term and retry", follower(), followerTerm, followerIndex)
-//    log.info(s"Leader log state: " + replicatedLog.entries)
 
     nextIndex.putIfSmaller(follower(), followerIndex)
 
@@ -157,11 +156,8 @@ private[raft] trait Leader {
       entries foreach { entry =>
         handleCommitIfSpecialEntry.applyOrElse(entry, default = handleNormalEntry)
 
-        if (raftConfig.publishTestingEvents) {
-          val committed = EntryCommitted(entry.index)
-          log.info("Publishing {}", committed)
-          context.system.eventStream.publish(committed)
-        }
+        if (raftConfig.publishTestingEvents)
+          context.system.eventStream.publish(EntryCommitted(entry.index))
       }
 
       replicatedLog.commit(indexOnMajority)
