@@ -3,14 +3,14 @@ package pl.project13.scala.akka.raft
 import pl.project13.scala.akka.raft.protocol._
 import org.scalatest.concurrent.Eventually
 import scala.concurrent.duration._
-import org.scalatest.time.{Millis, Span}
+import org.scalatest.time.{Seconds, Millis, Span}
 
 class LeaderElectionTest extends RaftSpec(callingThreadDispatcher = false)
   with Eventually {
 
   behavior of "Leader Election"
 
-  override implicit val patienceConfig = PatienceConfig(timeout = scaled(Span(500, Millis)), interval = scaled(Span(100, Millis)))
+  override implicit val patienceConfig = PatienceConfig(timeout = scaled(Span(2, Seconds)), interval = scaled(Span(100, Millis)))
 
   val initialMembers = 5
 

@@ -3,22 +3,32 @@ package pl.project13.scala.akka.raft
 import org.scalatest._
 import akka.testkit.{ImplicitSender, TestProbe, TestFSMRef, TestKit}
 import akka.actor._
-import scala.concurrent.duration._
 import java.util.concurrent.TimeUnit
 import akka.fsm.hack.TestFSMRefHack
 import pl.project13.scala.akka.raft.example.WordConcatRaftActor
+import org.scalatest.concurrent.Eventually
+import org.scalatest.time.{Millis, Seconds, Span}
+import scala.concurrent.duration.FiniteDuration
 
 /**
  * @param callingThreadDispatcher if true, will run using one thread. Use this for FSM tests, otherwise set to false to
  *                                enable a "really threading" dispatcher (see config for `raft-dispatcher`).
  */
 abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit(ActorSystem("raft-test"))
-  with ImplicitSender
+  with ImplicitSender with Eventually
   with FlatSpecLike with Matchers with BeforeAndAfterAll with BeforeAndAfterEach {
 
   import protocol._
 
-  val DefaultTimeout = 10.seconds // slow
+  val DefaultTimeout = 5
+
+  import scala.concurrent.duration._
+  val DefaultTimeoutDuration: FiniteDuration = DefaultTimeout.seconds
+
+  override implicit val patienceConfig = PatienceConfig(
+    timeout = scaled(Span(DefaultTimeout, Seconds)),
+    interval = scaled(Span(200, Millis))
+  )
   
   // notice the EventStreamAllMessages, thanks to this we're able to wait for messages like "leader elected" etc.
   protected var _members: Vector[TestFSMRef[RaftState, Metadata, SnapshottingWordConcatRaftActor]] = Vector.empty
@@ -138,19 +148,19 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
   def subscribeElectedLeader()(implicit probe: TestProbe): Unit =
     system.eventStream.subscribe(probe.ref, ElectedAsLeader.getClass)
 
-  def awaitElectedLeader(max: FiniteDuration = DefaultTimeout)(implicit probe: TestProbe): Unit =
+  def awaitElectedLeader(max: FiniteDuration = DefaultTimeoutDuration)(implicit probe: TestProbe): Unit =
     probe.expectMsgClass(max, ElectedAsLeader.getClass)
 
   def subscribeBeginElection()(implicit probe: TestProbe): Unit =
     system.eventStream.subscribe(probe.ref, BeginElection.getClass)
 
-  def awaitBeginElection(max: FiniteDuration = DefaultTimeout)(implicit probe: TestProbe): Unit =
+  def awaitBeginElection(max: FiniteDuration = DefaultTimeoutDuration)(implicit probe: TestProbe): Unit =
     probe.expectMsgClass(max, BeginElection.getClass)
 
   def subscribeEntryComitted()(implicit probe: TestProbe): Unit =
     system.eventStream.subscribe(probe.ref, classOf[EntryCommitted])
 
-  def awaitEntryComitted(Index: Int, max: FiniteDuration = DefaultTimeout)(implicit probe: TestProbe): Unit = {
+  def awaitEntryComitted(Index: Int, max: FiniteDuration = DefaultTimeoutDuration)(implicit probe: TestProbe): Unit = {
     val start = System.currentTimeMillis()
     probe.fishForMessage(max, hint = s"EntryCommitted($Index)") {
       case EntryCommitted(Index) =>

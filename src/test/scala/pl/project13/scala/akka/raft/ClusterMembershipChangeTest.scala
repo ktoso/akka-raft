@@ -4,12 +4,9 @@ import org.scalatest.concurrent.Eventually
 import org.scalatest.time.{Millis, Span}
 import pl.project13.scala.akka.raft.protocol._
 
-class ClusterMembershipChangeTest extends RaftSpec(callingThreadDispatcher = false)
-  with Eventually {
+class ClusterMembershipChangeTest extends RaftSpec(callingThreadDispatcher = false) {
 
   behavior of "Cluster membership change"
-
-  override implicit val patienceConfig = PatienceConfig(timeout = scaled(Span(500, Millis)), interval = scaled(Span(100, Millis)))
 
   val initialMembers = 5
 

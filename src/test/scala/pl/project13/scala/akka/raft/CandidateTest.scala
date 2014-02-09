@@ -54,7 +54,7 @@ class CandidateTest extends RaftSpec with BeforeAndAfterEach
     // given
     subscribeBeginElection()
 
-    implicit val patienceConfig = PatienceConfig(timeout = scaled(Span(100, Millis)), interval = scaled(Span(10, Millis)))
+    implicit val patienceConfig = PatienceConfig(timeout = scaled(Span(300, Millis)), interval = scaled(Span(50, Millis)))
 
     val entry = Entry(AppendWord("x"), Term(3), 5)
     candidate.setState(Candidate, data)

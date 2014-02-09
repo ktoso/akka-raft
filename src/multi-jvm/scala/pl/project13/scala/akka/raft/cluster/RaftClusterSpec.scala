@@ -8,8 +8,10 @@ import akka.actor.{Address, RootActorPath, ActorRef}
 import scala.concurrent.{Future, Await}
 import akka.pattern.ask
 import pl.project13.scala.akka.raft.cluster.ClusterProtocol.{AskForState, IAmInState}
+import org.scalatest.concurrent.Eventually
 
 abstract class RaftClusterSpec(config: MultiNodeConfig) extends MultiNodeSpec(config)
+  with Eventually with ClusterPatience
   with FlatSpecLike with Matchers with BeforeAndAfterAll {
 
   import concurrent.duration._

@@ -13,7 +13,6 @@ import pl.project13.scala.akka.raft.protocol._
 import org.scalatest.concurrent.Eventually
 
 abstract class ClusterWithManyMembersOnEachNodeElectionSpec extends RaftClusterSpec(ThreeNodesCluster)
-  with Eventually
   with ImplicitSender {
 
   implicit val defaultTimeout = {

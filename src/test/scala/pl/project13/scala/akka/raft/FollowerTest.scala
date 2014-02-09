@@ -70,10 +70,11 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
 
     // when
     info("After awaiting for election timeout...")
-    Thread.sleep(electionTimeoutMax.toMillis)
 
     // then
-    follower.stateName should equal (Candidate)
+    eventually {
+      follower.stateName should equal (Candidate)
+    }
   }
 
   it should "amortize taking the same write twice, the log should not contain duplicates then" in {
