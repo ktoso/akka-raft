@@ -1,7 +1,7 @@
 akka-raft
 =========
 
-<a href="https://travis-ci.org/ktoso/akka-raft"><img src="https://travis-ci.org/ktoso/akka-raft.png"/></a> *Argh, fleaky tests! WIP...*
+<a href="https://travis-ci.org/ktoso/akka-raft"><img src="https://travis-ci.org/ktoso/akka-raft.png"/></a>
 
 This is an akka based implementation of the **Raft consensus algorithm**.
 It is generic enough that you can build your own replicated state machines on top of it (with raft keeping track of the consensus part of it).
