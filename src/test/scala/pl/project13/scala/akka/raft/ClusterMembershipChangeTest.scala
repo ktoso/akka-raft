@@ -48,6 +48,7 @@ class ClusterMembershipChangeTest extends RaftSpec(callingThreadDispatcher = fal
     additionalActor.stateName should equal (Follower)
 
     eventually {
+      infoMemberStates()
       leaderCount should have length 1
       candidateCount should have length 0
       followerCount should have length 5

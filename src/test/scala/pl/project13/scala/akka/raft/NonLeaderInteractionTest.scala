@@ -25,7 +25,7 @@ class NonLeaderInteractionTest extends RaftSpec(callingThreadDispatcher = false)
     subscribeEntryComitted()
     leader() ! ClientMessage(self, AppendWord("first"))
 
-    val follower = followers().head
+    val follower = eventually { followers().head }
 
     awaitEntryComitted(0)
     expectMsg("first")
