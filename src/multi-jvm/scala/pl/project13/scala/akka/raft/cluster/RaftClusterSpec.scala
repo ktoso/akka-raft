@@ -19,6 +19,17 @@ abstract class RaftClusterSpec(config: MultiNodeConfig) extends MultiNodeSpec(co
 
   implicit val defaultTimeout: Timeout
   
+  def selectActorRefMaybe(nodeAddress: Address): Option[ActorRef] = {
+    val selection = system.actorSelection(RootActorPath(nodeAddress) / "user" / s"member-*")
+    
+    try {
+      Some(Await.result(selection.resolveOne(1.second), 1.second))
+    } catch {
+      case ex: Exception =>
+        None
+    }
+  }
+  
   def selectActorRef(nodeAddress: Address, memberNr: Int): ActorRef = {
     val selection = system.actorSelection(RootActorPath(nodeAddress) / "user" / s"member-$memberNr*")
     Await.result(selection.resolveOne(1.second), 1.second)

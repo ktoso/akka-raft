@@ -10,7 +10,7 @@ import scala.concurrent.Await
 import akka.util.Timeout
 import clusters._
 import pl.project13.scala.akka.raft.protocol._
-import pl.project13.scala.akka.raft.{ClusterConfiguration, RaftConfiguration}
+import pl.project13.scala.akka.raft.ClusterConfiguration
 
 abstract class SmallClusterElectionSpec extends RaftClusterSpec(ThreeNodesCluster)
   with ImplicitSender {
