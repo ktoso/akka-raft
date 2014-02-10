@@ -1,7 +1,5 @@
 package pl.project13.scala.akka.raft
 
-import org.scalatest.concurrent.Eventually
-import org.scalatest.time.{Millis, Span}
 import pl.project13.scala.akka.raft.protocol._
 
 class ClusterMembershipChangeTest extends RaftSpec(callingThreadDispatcher = false) {
@@ -35,23 +33,19 @@ class ClusterMembershipChangeTest extends RaftSpec(callingThreadDispatcher = fal
     awaitEntryComitted(1)
 
     // then
-    val leaderCount = leaders()
-    val candidateCount = candidates()
-    val followerCount = followers()
-
     infoMemberStates()
-    info("leader   : " + leaderCount.map(simpleName))
-    info("candidate: " + candidateCount.map(simpleName))
-    info("follower : " + followerCount.map(simpleName))
+    info("leader   : " + leaders().map(simpleName))
+    info("candidate: " + candidates().map(simpleName))
+    info("follower : " + followers().map(simpleName))
     info("")
 
     additionalActor.stateName should equal (Follower)
 
     eventually {
       infoMemberStates()
-      leaderCount should have length 1
-      candidateCount should have length 0
-      followerCount should have length 5
+      leaders() should have length 1
+      candidates() should have length 0
+      followers() should have length 5
     }
 
     info("After adding member-6, and configuration change: ")
