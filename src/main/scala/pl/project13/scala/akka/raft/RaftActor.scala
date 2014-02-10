@@ -7,17 +7,15 @@ import model._
 import protocol._
 import scala.concurrent.forkjoin.ThreadLocalRandom
 import pl.project13.scala.akka.raft.compaction.LogCompactionExtension
+import pl.project13.scala.akka.raft.config.RaftConfiguration
 
 abstract class RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
   with ReplicatedStateMachine
   with Follower with Candidate with Leader with SharedBehaviors {
 
   type Command
-  type Member = ActorRef
 
-  private val config = context.system.settings.config
-
-  protected val raftConfig = RaftConfiguration(config)
+  protected val raftConfig = RaftConfiguration(context.system)
 
   protected val logCompaction = LogCompactionExtension(context.system)
 

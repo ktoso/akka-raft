@@ -3,12 +3,13 @@ package pl.project13.scala.akka.raft
 import model._
 import protocol._
 import cluster.ClusterProtocol.{IAmInState, AskForState}
+import pl.project13.scala.akka.raft.config.RaftConfig
 
 
 private[raft] trait Candidate {
   this: RaftActor =>
 
-  protected def raftConfig: RaftConfiguration
+  protected def raftConfig: RaftConfig
 
   val candidateBehavior: StateFunction = {
     // message from client, tell it that we know of no leader

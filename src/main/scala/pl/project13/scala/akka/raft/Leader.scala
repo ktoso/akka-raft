@@ -6,12 +6,12 @@ import pl.project13.scala.akka.raft.cluster.ClusterProtocol.{IAmInState, AskForS
 
 import model._
 import protocol._
-import scala.annotation.tailrec
+import pl.project13.scala.akka.raft.config.RaftConfig
 
 private[raft] trait Leader {
   this: RaftActor =>
   
-  protected def raftConfig: RaftConfiguration
+  protected def raftConfig: RaftConfig
 
   private val HeartbeatTimerName = "heartbeat-timer"
 
@@ -81,13 +81,13 @@ private[raft] trait Leader {
       stay()
   }
 
-  def initializeLeaderState(members: Set[Member]) {
+  def initializeLeaderState(members: Set[ActorRef]) {
     log.info("Preparing nextIndex and matchIndex table for followers, init all to: replicatedLog.lastIndex = {}", replicatedLog.lastIndex)
     nextIndex = LogIndexMap.initialize(members, replicatedLog.lastIndex)
     matchIndex = LogIndexMap.initialize(members, -1)
   }
 
-  def sendEntries(follower: Member, m: LeaderMeta) {
+  def sendEntries(follower: ActorRef, m: LeaderMeta) {
     follower ! AppendEntries(
       m.currentTerm,
       replicatedLog,

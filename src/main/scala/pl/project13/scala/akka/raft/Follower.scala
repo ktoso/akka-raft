@@ -7,11 +7,12 @@ import protocol._
 import cluster.ClusterProtocol.{IAmInState, AskForState}
 import scala.annotation.tailrec
 import akka.actor.ActorRef
+import pl.project13.scala.akka.raft.config.RaftConfig
 
 private[raft] trait Follower {
   this: RaftActor =>
 
-  protected def raftConfig: RaftConfiguration
+  protected def raftConfig: RaftConfig
 
   /** Used when a client contacts this Follower, instead of the Leader; so we redirect him to the Leader. */
   var recentlyContactedByLeader: Option[ActorRef] = None 
