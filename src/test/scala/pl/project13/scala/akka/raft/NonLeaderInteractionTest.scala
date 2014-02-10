@@ -8,8 +8,7 @@ import org.scalatest.concurrent.Eventually
 import org.scalatest.GivenWhenThen
 
 class NonLeaderInteractionTest extends RaftSpec(callingThreadDispatcher = false)
-  with GivenWhenThen
-  with Eventually {
+  with GivenWhenThen {
 
   behavior of "Non Leader Interaction"
 
@@ -25,7 +24,14 @@ class NonLeaderInteractionTest extends RaftSpec(callingThreadDispatcher = false)
 
     val msg = ClientMessage(client.ref, AppendWord("test"))
 
+    subscribeEntryComitted()
+    leader() ! ClientMessage(self, AppendWord("first"))
+
     val follower = followers().head
+
+    awaitEntryComitted(0)
+    expectMsg("first")
+
     When(s"the client sends a write message to a non-leader member (${simpleName(follower)})")
     follower ! msg
 

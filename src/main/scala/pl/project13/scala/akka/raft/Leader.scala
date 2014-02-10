@@ -172,7 +172,7 @@ private[raft] trait Leader {
         handleCommitIfSpecialEntry.applyOrElse(entry, default = handleNormalEntry)
 
         if (raftConfig.publishTestingEvents)
-          context.system.eventStream.publish(EntryCommitted(entry.index))
+          context.system.eventStream.publish(EntryCommitted(entry.index, self))
       }
 
       replicatedLog.commit(indexOnMajority)

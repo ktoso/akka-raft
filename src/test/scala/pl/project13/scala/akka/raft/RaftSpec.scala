@@ -163,12 +163,12 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
   def awaitEntryComitted(Index: Int, max: FiniteDuration = DefaultTimeoutDuration)(implicit probe: TestProbe): Unit = {
     val start = System.currentTimeMillis()
     probe.fishForMessage(max, hint = s"EntryCommitted($Index)") {
-      case EntryCommitted(Index) =>
-        info(s"Finished fishing for EntryCommitted($Index), took ${System.currentTimeMillis() - start}ms")
+      case EntryCommitted(Index, actor) =>
+        info(s"Finished fishing for EntryCommitted($Index) on ${simpleName(actor)}, took ${System.currentTimeMillis() - start}ms")
         true
 
       case other =>
-        info(s"Fished $other, still waiting for ${EntryCommitted(Index)}...")
+        info(s"Fished $other, still waiting for ${EntryCommitted(Index, null)}...")
         false
     }
   }
