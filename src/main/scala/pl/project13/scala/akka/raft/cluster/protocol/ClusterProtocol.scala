@@ -3,7 +3,7 @@ package pl.project13.scala.akka.raft.cluster.protocol
 import pl.project13.scala.akka.raft.protocol._
 import akka.actor.Address
 
-private[cluster] object ClusterProtocol {
+private[cluster] trait ClusterProtocol {
 
   /**
    * Sent by ClusterRaftActor, to itself in order facilitate a retry to identify if unable to reach remote raft members

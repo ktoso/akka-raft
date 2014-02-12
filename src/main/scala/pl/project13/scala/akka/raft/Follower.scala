@@ -4,10 +4,9 @@ import scala.collection.immutable
 
 import model._
 import protocol._
-import cluster.ClusterProtocol.{IAmInState, AskForState}
-import scala.annotation.tailrec
+import config.RaftConfig
 import akka.actor.ActorRef
-import pl.project13.scala.akka.raft.config.RaftConfig
+import scala.annotation.tailrec
 
 private[raft] trait Follower {
   this: RaftActor =>
@@ -20,7 +19,7 @@ private[raft] trait Follower {
   val followerBehavior: StateFunction = {
     // message from client, tell it about the last leader we've took a write from
     case Event(msg: ClientMessage[Command], m: Meta) =>
-      log.info("Candidate got {} from client; Respond with last Leader that took write from: {}", msg, recentlyContactedByLeader)
+      log.info("Follower got {} from client; Respond with last Leader that took write from: {}", msg, recentlyContactedByLeader)
       sender() ! LeaderIs(recentlyContactedByLeader)
       stay()
 

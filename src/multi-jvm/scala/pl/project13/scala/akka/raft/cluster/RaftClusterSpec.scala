@@ -7,7 +7,6 @@ import akka.util.Timeout
 import akka.actor.{Address, RootActorPath, ActorRef}
 import scala.concurrent.{Future, Await}
 import akka.pattern.ask
-import pl.project13.scala.akka.raft.cluster.ClusterProtocol.{AskForState, IAmInState}
 import org.scalatest.concurrent.Eventually
 
 abstract class RaftClusterSpec(config: MultiNodeConfig) extends MultiNodeSpec(config)
@@ -70,9 +69,9 @@ abstract class RaftClusterSpec(config: MultiNodeConfig) extends MultiNodeSpec(co
   }
 
   case class MemberCounter(members: List[MemberAndState]) {
-    def followers() = members.filter(_.state == Follower)
-    def candidates() = members.filter(_.state == Candidate)
-    def leaders() = members.filter(_.state == Leader)
+    def followers() = members.filter(_.state.toString == Follower.toString)
+    def candidates() = members.filter(_.state.toString == Candidate.toString)
+    def leaders() = members.filter(_.state.toString == Leader.toString)
 
     def leader() = maybeLeader().getOrElse { throw new Exception("Unable to find leader! Members: " + members) }
     def maybeLeader() = {

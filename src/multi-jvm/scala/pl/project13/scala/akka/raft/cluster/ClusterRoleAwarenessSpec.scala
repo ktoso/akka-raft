@@ -6,8 +6,8 @@ import akka.cluster.ClusterEvent.{CurrentClusterState, MemberUp}
 import akka.cluster.Cluster
 import akka.actor.Props
 import akka.util.Timeout
-import pl.project13.scala.akka.raft.example.cluster.WordConcatClusterRaftActor
 import clusters._
+import pl.project13.scala.akka.raft.example.WordConcatRaftActor
 
 abstract class ClusterRoleAwarenessSpec extends RaftClusterSpec(FourNodesOnlyTwoRaftNodesCluster)
   with ImplicitSender {
@@ -23,7 +23,6 @@ abstract class ClusterRoleAwarenessSpec extends RaftClusterSpec(FourNodesOnlyTwo
 
   behavior of s"Leader election on cluster of $initialParticipants nodes"
 
-
   it should "not allow raft Members to be started on Nodes without the 'raft' role" in within(20.seconds) {
     Cluster(system).subscribe(testActor, classOf[MemberUp])
     expectMsgClass(classOf[CurrentClusterState])
@@ -32,7 +31,8 @@ abstract class ClusterRoleAwarenessSpec extends RaftClusterSpec(FourNodesOnlyTwo
 
     (1 to initialParticipants) map { idx =>
       runOn(nodes(idx)) {
-        system.actorOf(Props[WordConcatClusterRaftActor], s"member-$idx")
+        val raftActor = system.actorOf(Props[WordConcatRaftActor], s"raft-$idx")
+        system.actorOf(ClusterRaftActor.props(raftActor, initialParticipants), s"member-$idx")
       }
     }
 
@@ -52,7 +52,7 @@ abstract class ClusterRoleAwarenessSpec extends RaftClusterSpec(FourNodesOnlyTwo
 
 }
 
-class ClusterRoleAwarenessSpecMultiJvmNode1 extends ClusterRoleAwarenessSpec
-class ClusterRoleAwarenessSpecMultiJvmNode2 extends ClusterRoleAwarenessSpec
-class ClusterRoleAwarenessSpecMultiJvmNode3 extends ClusterRoleAwarenessSpec
-class ClusterRoleAwarenessSpecMultiJvmNode4 extends ClusterRoleAwarenessSpec
+class ClusterRoleAwarenessJvmNode1 extends ClusterRoleAwarenessSpec
+class ClusterRoleAwarenessJvmNode2 extends ClusterRoleAwarenessSpec
+class ClusterRoleAwarenessJvmNode3 extends ClusterRoleAwarenessSpec
+class ClusterRoleAwarenessJvmNode4 extends ClusterRoleAwarenessSpec

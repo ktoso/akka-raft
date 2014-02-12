@@ -10,39 +10,82 @@ trait SharedBehaviors {
   private[raft] implicit val raftDispatcher = context.system.dispatchers.lookup("raft-dispatcher")
 
   /** Waits for initial cluster configuration. Step needed before we can start voting for a Leader. */
-  private[raft] lazy val awaitInitialConfigurationBehavior: StateFunction = {
+  private[raft] lazy val initialConfigurationBehavior: StateFunction = {
+
+    case Event(AssignClusterSelf(clusterSelf), m: Meta) =>
+      log.info("Registered proxy actor, will expose clusterSelf as: {}", clusterSelf)
+      stay() using m.copy(clusterSelf = clusterSelf)
+
+
     case Event(ChangeConfiguration(initialConfig), m: Meta) =>
       log.info("Applying initial raft cluster configuration. Consists of [{}] nodes: {}",
         initialConfig.members.size,
         initialConfig.members.map(_.path.elements.last).mkString("{", ", ", "}"))
 
       val deadline = resetElectionDeadline()
-      log.info("Finished init of new Raft member, becoming Follower. Initial election deadline: " + deadline)
+      log.info("Finished init of new Raft member, becoming Follower. Initial election deadline: {}", deadline)
       goto(Follower) using m.copy(config = initialConfig)
+
 
     case Event(msg: AppendEntries[Command], m: Meta) =>
       log.info("Got AppendEntries from a Leader, but am in Init state. Will ask for it's configuration and join Raft cluster.")
       leader() ! RequestConfiguration
       stay()
+
+
+    // handle initial discovery of nodes, as opposed to initialization via `initialConfig`
+    case Event(added: RaftMemberAdded, m: Meta) =>
+      val newMembers = m.members + added.member
+      
+      val initialConfig = ClusterConfiguration(newMembers)
+      
+      if (added.keepInitUntil <= newMembers.size) {
+        log.info("Discovered the required min. of {} raft cluster members, becoming Follower.", added.keepInitUntil)
+        goto(Follower) using m.copy(config = initialConfig)
+      } else {
+        // keep waiting for others to be discovered
+        log.info("Up to {} discovered raft cluster members, still waiting in Init until {} discovered.", newMembers.size, added.keepInitUntil)
+        stay() using m.copy(config = initialConfig)
+      }
+
+    case Event(removed: RaftMemberRemoved, m: Meta) =>
+      val newMembers = m.config.members - removed.member
+            
+      val waitingConfig = ClusterConfiguration(newMembers)
+      
+      // keep waiting for others to be discovered
+      log.debug("Removed one member, until now discovered {} raft cluster members, still waiting in Init until {} discovered.", newMembers.size, removed.keepInitUntil)
+      stay() using m.copy(config = waitingConfig)
   }
 
   /** Handles adding / removing raft members; Should be handled in every state */
   private[raft] lazy val clusterManagementBehavior: StateFunction = {
+
     // enter joint consensus phase of configuration comitting
     case Event(ChangeConfiguration(newConfiguration), m: Metadata) =>
       val transitioningConfig = m.config transitionTo newConfiguration
 
-      log.info("Starting transition to new Configuration, old [size: {}]: {}, migrating to [size: {}]: {}",
-        m.config.members.size, simpleNames(m.config.members),
-        transitioningConfig.transitionToStable.members.size, transitioningConfig)
+      val configChangeWouldBeNoop =
+        transitioningConfig.transitionToStable.members == m.config.members
 
-      // configuration change goes over the same process as log appending
-      // here we initiate the 1st phase - committing the "joint consensus config", which includes all nodes from these configs
-      // the 2nd phase is initiated upon committing of this entry to the log.
-      // Once the new config is committed, nodes that are not included can step-down
-      self ! ClientMessage(self, transitioningConfig)
+      if (configChangeWouldBeNoop) {
+        // no transition needed, the configuration change message was out of date
+      } else {
+
+        log.info("Starting transition to new Configuration, old [size: {}]: {}, migrating to [size: {}]: {}",
+          m.config.members.size, simpleNames(m.config.members),
+          transitioningConfig.transitionToStable.members.size, transitioningConfig)
+
+        // configuration change goes over the same process as log appending
+        // here we initiate the 1st phase - committing the "joint consensus config", which includes all nodes from these configs
+        // the 2nd phase is initiated upon committing of this entry to the log.
+        // Once the new config is committed, nodes that are not included can step-down
+        m.clusterSelf ! ClientMessage(m.clusterSelf, transitioningConfig) // todo unclean?
+      }
 
       stay()
+
+    // todo handle RaftMember{Added / Removed} here? Think if not duplicating mechanisms though.
   }
 
   private[raft] lazy val snapshottingBehavior: StateFunction = {

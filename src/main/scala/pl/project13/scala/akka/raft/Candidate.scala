@@ -2,8 +2,7 @@ package pl.project13.scala.akka.raft
 
 import model._
 import protocol._
-import cluster.ClusterProtocol.{IAmInState, AskForState}
-import pl.project13.scala.akka.raft.config.RaftConfig
+import config.RaftConfig
 
 
 private[raft] trait Candidate {
@@ -27,11 +26,11 @@ private[raft] trait Candidate {
       } else {
         log.info("Initializing election (among {} nodes) for {}", m.config.members.size, m.currentTerm)
 
-        val request = RequestVote(m.currentTerm, self, replicatedLog.lastTerm, replicatedLog.lastIndex)
+        val request = RequestVote(m.currentTerm, m.clusterSelf, replicatedLog.lastTerm, replicatedLog.lastIndex)
         m.membersExceptSelf foreach { _ ! request }
 
         val includingThisVote = m.incVote
-        stay() using includingThisVote.withVoteFor(m.currentTerm, self)
+        stay() using includingThisVote.withVoteFor(m.currentTerm, m.clusterSelf)
       }
 
     case Event(msg: RequestVote, m: ElectionMeta) if m.canVoteIn(msg.term) =>
@@ -65,7 +64,7 @@ private[raft] trait Candidate {
 
       if (leaderIsAhead) {
         log.info("Reverting to Follower, because got AppendEntries from Leader in {}, but am in {}", append.term, m.currentTerm)
-        self.tell(append, sender())
+        m.clusterSelf.tell(append, sender())
         goto(Follower) using m.forFollower
       } else {
         stay()
@@ -74,7 +73,7 @@ private[raft] trait Candidate {
     // ending election due to timeout
     case Event(ElectionTimeout, m: ElectionMeta) if m.config.members.size > 1 =>
       log.info("Voting timeout, starting a new election (among {})...", m.config.members.size)
-      self ! BeginElection
+      m.clusterSelf ! BeginElection
       stay() using m.forNewElection
 
     // would like to start election, but I'm all alone! ;-(

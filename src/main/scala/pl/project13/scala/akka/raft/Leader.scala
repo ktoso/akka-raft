@@ -2,11 +2,9 @@ package pl.project13.scala.akka.raft
 
 import akka.actor.ActorRef
 
-import pl.project13.scala.akka.raft.cluster.ClusterProtocol.{IAmInState, AskForState}
-
 import model._
 import protocol._
-import pl.project13.scala.akka.raft.config.RaftConfig
+import config.RaftConfig
 
 private[raft] trait Leader {
   this: RaftActor =>
@@ -38,13 +36,13 @@ private[raft] trait Leader {
 
       log.debug("adding to log: {}", entry)
       replicatedLog += entry
-      matchIndex.put(self, entry.index)
+      matchIndex.put(m.clusterSelf, entry.index)
       log.debug("log status = {}", replicatedLog)
 
       val meta = maybeUpdateConfiguration(m, entry.command)
       replicateLog(meta)
 
-      if (meta.config.isPartOfNewConfiguration(self))
+      if (meta.config.isPartOfNewConfiguration(m.clusterSelf))
         stay() using meta
       else
         goto(Follower) using meta.forFollower // or maybe goto something else?
@@ -55,7 +53,7 @@ private[raft] trait Leader {
       stepDown(m)
 
     case Event(append: AppendEntries[Command], m: LeaderMeta) if append.term <= m.currentTerm =>
-      log.warning("Leader (@ {}) got AppendEntries from rogue Leader (@ {}), which is not fresher than this one. Will send entries to {}, to force it to step down.", m.currentTerm, append.term, sender())
+      log.warning("Leader (@ {}) got AppendEntries from rogue Leader ({} @ {}); It's not fresher than self. Will send entries, to force it to step down.", m.currentTerm, sender(), append.term)
       sendEntries(sender(), m)
       stay()
     // end of rogue Leader handling
@@ -113,14 +111,9 @@ private[raft] trait Leader {
   }
 
   def replicateLog(m: LeaderMeta) {
-    m.others foreach { member =>
+    m.membersExceptSelf foreach { member =>
       // todo remove me
-      log.debug("sending: {} to {}", AppendEntries(
-        m.currentTerm,
-        replicatedLog,
-        fromIndex = nextIndex.valueFor(member),
-        leaderCommitId = replicatedLog.committedIndex
-      ), member)
+//      log.info("sending: {} to {}", AppendEntries(m.currentTerm, replicatedLog, fromIndex = nextIndex.valueFor(member), leaderCommitId = replicatedLog.committedIndex), member)
 
       member ! AppendEntries(
         m.currentTerm,
@@ -172,7 +165,7 @@ private[raft] trait Leader {
         handleCommitIfSpecialEntry.applyOrElse(entry, default = handleNormalEntry)
 
         if (raftConfig.publishTestingEvents)
-          context.system.eventStream.publish(EntryCommitted(entry.index, self))
+          context.system.eventStream.publish(EntryCommitted(entry.index, m.clusterSelf))
       }
 
       replicatedLog.commit(indexOnMajority)

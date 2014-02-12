@@ -7,8 +7,8 @@ import org.scalatest.time._
 trait ClusterPatience extends PatienceConfiguration {
   override implicit val patienceConfig =
     PatienceConfig(
-      timeout = scaled(Span(5, Seconds)),
-      interval = scaled(Span(300, Millis))
+      timeout = scaled(Span(8, Seconds)),
+      interval = scaled(Span(500, Millis))
     )
 
 }

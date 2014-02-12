@@ -4,13 +4,13 @@ import akka.testkit.ImplicitSender
 import concurrent.duration._
 import akka.cluster.ClusterEvent.{CurrentClusterState, MemberUp}
 import akka.cluster.Cluster
-import akka.actor.{RootActorPath, Props}
-import pl.project13.scala.akka.raft.example.cluster.WordConcatClusterRaftActor
-import scala.concurrent.Await
+import akka.actor.Props
 import akka.util.Timeout
 import clusters._
 import pl.project13.scala.akka.raft.protocol._
 import pl.project13.scala.akka.raft.ClusterConfiguration
+import pl.project13.scala.akka.raft.example.WordConcatRaftActor
+import org.scalatest.time.{Millis, Span, Seconds}
 
 abstract class SmallClusterElectionSpec extends RaftClusterSpec(ThreeNodesCluster)
   with ImplicitSender {
@@ -20,13 +20,19 @@ abstract class SmallClusterElectionSpec extends RaftClusterSpec(ThreeNodesCluste
     Timeout(3.seconds)
   }
 
+  override implicit val patienceConfig =
+    PatienceConfig(
+      timeout = scaled(Span(20, Seconds)),
+      interval = scaled(Span(1, Millis))
+    )
+
   def initialParticipants = 3
 
   behavior of s"Leader election on cluster of $initialParticipants nodes"
 
   import FiveNodesCluster._
 
-  it should "elect a leader" in within(20.seconds) {
+  it should "elect a leader" in within(30.seconds) {
     Cluster(system).subscribe(testActor, classOf[MemberUp])
     expectMsgClass(classOf[CurrentClusterState])
 
@@ -38,7 +44,8 @@ abstract class SmallClusterElectionSpec extends RaftClusterSpec(ThreeNodesCluste
 
     (1 to initialParticipants) map { idx =>
       runOn(nodes(idx)) {
-        system.actorOf(Props[WordConcatClusterRaftActor], s"member-$idx")
+        val raftActor = system.actorOf(Props[WordConcatRaftActor], s"small-raft-$idx")
+        system.actorOf(ClusterRaftActor.props(raftActor, initialParticipants), s"member-$idx")
       }
     }
 
@@ -50,33 +57,26 @@ abstract class SmallClusterElectionSpec extends RaftClusterSpec(ThreeNodesCluste
 
     testConductor.enter("all-nodes-up")
 
-    val member1 = Await.result(system.actorSelection(RootActorPath(firstAddress) / "user" / "member-*").resolveOne(1.second), 1.second)
-    val member2 = Await.result(system.actorSelection(RootActorPath(secondAddress) / "user" / "member-*").resolveOne(1.second), 1.second)
-    val member3 = Await.result(system.actorSelection(RootActorPath(thirdAddress) / "user" / "member-*").resolveOne(1.second), 1.second)
+    val member1 = selectActorRef(firstAddress, 1)
+    val member2 = selectActorRef(secondAddress, 2)
+    val member3 = selectActorRef(thirdAddress, 3)
     val members = member1 :: member2 :: member3 :: Nil
-    
+
     // initialize raft
     val clusterConfig = ClusterConfiguration(members)
     members foreach { _ ! ChangeConfiguration(clusterConfig) }
-    
-    // give raft a bit of time to discover nodes and elect a leader
-    Thread.sleep(1000)
 
     testConductor.enter("raft-up")
 
-    val state1 = askMemberForState(member1)
-    val state2 = askMemberForState(member2)
-    val state3 = askMemberForState(member3)
+    eventually {
+      val states = askMembersForState(members: _*)
 
-    val states = state1 :: state2 :: state3 :: Nil
-    info("Cluster state:")
-    info(s"member-1 is ${state1.state}")
-    info(s"member-2 is ${state2.state}")
-    info(s"member-3 is ${state3.state}")
+      states.leaders().size should equal (1)
+      (states.candidates().size + states.followers().size) should equal (2)
+      states.infoMemberStates()
+    }
 
-    states.count(_.state == Leader) should equal (1)
-    states.count(_.state == Candidate) should equal (0)
-    states.count(_.state == Follower) should equal (2)
+
   }
 
 }

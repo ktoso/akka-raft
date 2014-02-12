@@ -31,6 +31,10 @@ private[protocol] trait InternalProtocol extends Serializable {
 
   case object SendHeartbeat extends LeaderMessage
 
+  private[raft] case object AskForState                 extends Message[Internal]
+  private[raft] case class IAmInState(state: RaftState) extends Message[Internal]
+
+
   // ----    testing and monitoring messages     ----
   case class EntryCommitted(idx: Int, on: ActorRef) extends Message[Testing]
   case class SnapshotWritten(initialSize: Int, compactedSize: Int) extends Message[Testing]

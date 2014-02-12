@@ -18,5 +18,6 @@ class RaftConfig (config: Config) extends Extension {
 
   val heartbeatInterval = raftConfig.getDuration("heartbeat-interval", TimeUnit.MILLISECONDS).millis
 
-  val raftRoleName = raftConfig.getString("cluster-role-name")
+  val clusterAutoDiscoveryIdentifyTimeout = raftConfig.getDuration("cluster.auto-discovery.identify-timeout", TimeUnit.MILLISECONDS).millis
+  val clusterAutoDiscoveryRetryCount = raftConfig.getInt("cluster.auto-discovery.retry-count")
 }

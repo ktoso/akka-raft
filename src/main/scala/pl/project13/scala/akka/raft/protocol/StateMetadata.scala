@@ -11,7 +11,7 @@ private[protocol] trait StateMetadata extends Serializable {
   type Candidate = ActorRef
 
   sealed trait Metadata {
-    def self: ActorRef
+    def clusterSelf: ActorRef
     def votes: Map[Term, Candidate]
     def currentTerm: Term
 
@@ -19,7 +19,7 @@ private[protocol] trait StateMetadata extends Serializable {
     def isConfigTransitionInProgress = config.isTransitioning
 
     /** Since I'm the Leader "everyone but myself" */
-    def membersExceptSelf = config.members filterNot { _ == self }
+    def membersExceptSelf = config.members filterNot { _ == clusterSelf }
 
     def members = config.members
 
@@ -32,14 +32,14 @@ private[protocol] trait StateMetadata extends Serializable {
   }
 
   case class Meta(
-    self: ActorRef,
+    clusterSelf: ActorRef,
     currentTerm: Term,
     config: ClusterConfiguration,
     votes: Map[Term, Candidate]
   ) extends Metadata {
     
     // transition helpers
-    def forNewElection: ElectionMeta = ElectionMeta(self, currentTerm.next, 0, config, votes)
+    def forNewElection: ElectionMeta = ElectionMeta(clusterSelf, currentTerm.next, 0, config, votes)
 
     def withVote(term: Term, candidate: ActorRef) = {
       copy(votes = votes updated (term, candidate))
@@ -53,7 +53,7 @@ private[protocol] trait StateMetadata extends Serializable {
   }
 
   case class ElectionMeta(
-    self: ActorRef,
+    clusterSelf: ActorRef,
     currentTerm: Term,
     votesReceived: Int,
     config: ClusterConfiguration,
@@ -68,13 +68,13 @@ private[protocol] trait StateMetadata extends Serializable {
 
     def withVoteFor(term: Term, candidate: ActorRef) = copy(votes = votes + (term -> candidate))
 
-    def forLeader: LeaderMeta        = LeaderMeta(self, currentTerm, config)
-    def forFollower: Meta            = Meta(self, currentTerm, config, Map.empty)
+    def forLeader: LeaderMeta        = LeaderMeta(clusterSelf, currentTerm, config)
+    def forFollower: Meta            = Meta(clusterSelf, currentTerm, config, Map.empty)
     def forNewElection: ElectionMeta = this.forFollower.forNewElection
   }
 
   case class LeaderMeta(
-    self: ActorRef,
+    clusterSelf: ActorRef,
     currentTerm: Term,
     config: ClusterConfiguration
   ) extends Metadata {
@@ -84,7 +84,7 @@ private[protocol] trait StateMetadata extends Serializable {
     // todo duplication; yeah, having 3 meta classes was a bad idea. todo make one Meta class
     def withConfig(conf: ClusterConfiguration): LeaderMeta = copy(config = conf)
 
-    def forFollower: Meta = Meta(self, currentTerm, config, Map.empty)
+    def forFollower: Meta = Meta(clusterSelf, currentTerm, config, Map.empty)
   }
 
 }

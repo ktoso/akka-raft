@@ -1,16 +1,12 @@
 package pl.project13.scala.akka.raft.cluster
 
-import akka.actor.{ActorIdentity, Identify, RootActorPath, Actor}
+import protocol._
 import akka.cluster.{Member, Cluster}
 import akka.cluster.ClusterEvent._
-import akka.cluster.ClusterEvent.MemberUp
-import akka.cluster.ClusterEvent.UnreachableMember
-import pl.project13.scala.akka.raft.RaftActor
-import pl.project13.scala.akka.raft.protocol._
-import akka.util.Timeout
 import concurrent.duration._
-import pl.project13.scala.akka.raft.cluster.ClusterProtocol.{RaftMemberRemoved, RaftMemberAdded}
 import pl.project13.scala.akka.raft.config.{RaftConfig, RaftConfiguration}
+import pl.project13.scala.akka.raft.protocol._
+import akka.actor._
 
 /**
  * Akka cluster ready [[pl.project13.scala.akka.raft.RaftActor]].
@@ -22,46 +18,98 @@ import pl.project13.scala.akka.raft.config.{RaftConfig, RaftConfiguration}
  * The role validation can be turned off, in case you want to start raft on all available nodes (without looking at the
  * presence of the "raft" role), but it is discouraged to do so.
  *
- *
+ * @param keepInitUntilFound keeps underlying `raftActor` in `Init` state, until this number of other raft actors has been auto-discovered
  */
-trait ClusterRaftActor extends RaftActor {
+class ClusterRaftActor(raftActor: ActorRef, keepInitUntilFound: Int) extends Actor with ActorLogging {
 
   val cluster = Cluster(context.system)
+
+  val raftConfig = RaftConfiguration(context.system)
 
   checkIfRunningOnRaftNodeOrStop(raftConfig, cluster)
 
   import context.dispatcher
-  
-  implicit val timeout = Timeout(2.seconds) // todo make configurable via config
 
-  abstract override def preStart(): Unit = {
+  val identifyTimeout = raftConfig.clusterAutoDiscoveryIdentifyTimeout
+
+  // user overrideable in order to support custom raft groups
+
+  /**
+   * ActorPath where to look on remote members for raft actors, when a new node joins the cluster.
+   *
+   * Defaults to: `RootActorPath(nodeAddress) / user / member-*`
+   */
+  def raftMembersPath(nodeAddress: Address): ActorPath = RootActorPath(nodeAddress) / "user" / "member-*" // todo make these abstract
+
+  /**
+   * Only nodes with this role will participate in this raft cluster.
+   *
+   * Detaults to `"raft"`, but you can override it in order to support multiple raft clusters in the same actor system
+   */
+  def raftGroupRole: String = "raft" // todo make these abstract
+
+  // end of user overrideable
+
+  /**
+   * Used to keep track if we still need to retry sending Identify to an address.
+   * If node is not here, it has responsed with at least one ActorIdentity.
+   */
+  private var awaitingIdentifyFrom = Set.empty[Address]
+
+  override def preStart(): Unit = {
     super.preStart()
+    log.info("Joining new raft actor to cluster, will watch {}", raftActor.path)
+
+    // ClusterRaftActor will react with termination, if the raftActor terminates
+    context watch raftActor
+
+    // tell the raft actor, that this one is it's "outside world representative"
+    raftActor ! AssignClusterSelf(self)
+
     cluster.subscribe(self, initialStateMode = InitialStateAsEvents, classOf[MemberEvent], classOf[UnreachableMember])
   }
 
-  abstract override def postStop(): Unit = {
-    cluster.unsubscribe(self)
+  override def postStop(): Unit = {
+    context unwatch raftActor
+    cluster unsubscribe self
     super.postStop()
   }
 
-  override def aroundReceive(receive: Actor.Receive, msg: Any): Unit = msg match {
+  def receive = {
 
     // members joining
     case MemberUp(member) if isRaftNode(member) =>
         log.info("Node is Up: {}, selecting and adding actors to Raft cluster..", member.address)
-        // todo make naming configurable
-        val memberSelection = context.actorSelection(RootActorPath(member.address) / "user" / "member-*")
-        memberSelection ! Identify(member.address)
+        tryIdentifyRaftMembers(member.address, RaftMembersIdentifyTimedOut(member.address, raftConfig.clusterAutoDiscoveryRetryCount))
 
     case MemberUp(member) =>
-      log.debug("Another node joined, but it's does not have a [{}] role, ignoring it.", raftConfig.raftRoleName)
+      log.debug("Another node joined, but it's does not have a [{}] role, ignoring it.", raftGroupRole)
 
-    case ActorIdentity(address, Some(raftActorRef)) =>
+
+    // identifying new members ------------------
+
+    case ActorIdentity(address: Address, Some(raftActorRef)) =>
       log.info("Adding actor {} to Raft cluster, from address: {}", raftActorRef, address)
-      self ! RaftMemberAdded(raftActorRef)
+      // we got at-least-one response, if we get more that's good, but no need to retry
+      awaitingIdentifyFrom -= address
 
-    case ActorIdentity(address, None) =>
+      raftActor ! RaftMemberAdded(raftActorRef, keepInitUntilFound)
+
+    case ActorIdentity(address: Address, None) =>
       log.warning("Unable to find any raft-actors on node: {}", address)
+      awaitingIdentifyFrom -= address // == got at-least-one response
+
+    case timedOut: RaftMembersIdentifyTimedOut
+      if timedOut.shouldRetry  && awaitingIdentifyFrom.contains(timedOut.address) =>
+
+      log.warning("Did not hear back for Identify call to {}, will try again {} more times...", timedOut.address, timedOut.retryMoreTimes)
+      tryIdentifyRaftMembers(timedOut.address, timedOut.forRetry) // todo enable handling of these messages in any state, extend clustermanagementBehavior!
+
+    case timedOut: RaftMembersIdentifyTimedOut =>
+      log.debug("Did hear back from {}, stopping retry", timedOut.address)
+
+    // end of identifying new members -----------
+
 
     // members going away
     case UnreachableMember(member) =>
@@ -75,27 +123,48 @@ trait ClusterRaftActor extends RaftActor {
     case _: MemberEvent =>
       // ignore
 
-    case _ =>
-      // everything else just push to the RaftActor's receive
-      super.aroundReceive(receive, msg)
+    case Terminated(watchedActor) if watchedActor == raftActor /* sanity check, really needed? */ =>
+      context stop self
+
+    case msg =>
+      // all other messages, we proxy through to the RaftActor, it will handle the rest
+      raftActor.tell(msg, sender())
   }
 
-  protected def isRaftNode(member: Member) =
-    member.roles contains raftConfig.raftRoleName
+
+  private def tryIdentifyRaftMembers(address: Address, onIdentityTimeout: RaftMembersIdentifyTimedOut) {
+    val memberSelection = context.actorSelection(raftMembersPath(address))
+
+    // we need a response from this node
+    awaitingIdentifyFrom += address
+    
+    context.system.scheduler.scheduleOnce(identifyTimeout, self, onIdentityTimeout)
+    memberSelection ! Identify(address)
+  }
+
+  private def isRaftNode(member: Member) =
+    member.roles contains raftGroupRole
 
   /**
    * If `check-for-raft-cluster-node-role` is enabled, will check if running on a node with the `"raft"` role.
    * If not running on a `"raft"` node, will throw an
    */
   protected def checkIfRunningOnRaftNodeOrStop(config: RaftConfig, cluster: Cluster) {
-    if (!cluster.selfRoles.contains(config.raftRoleName)) {
+    if (!cluster.selfRoles.contains(raftGroupRole)) {
       log.warning(
         s"""Tried to initialize ${getClass.getSimpleName} on cluster node (${cluster.selfAddress}), but it's roles: """ +
-        s"""${cluster.selfRoles} did not include the required ${raftConfig.raftRoleName}role, so stopping this actor. """ +
+        s"""${cluster.selfRoles} did not include the required ${raftGroupRole}role, so stopping this actor. """ +
          """Please verify your actor spawning logic, or update your configuration with akka.cluster.roles = [ "raft" ] for this node."""
       )
 
       context.system.stop(self)
     }
+  }
+}
+
+object ClusterRaftActor {
+
+  def props(raftActor: ActorRef, keepInitUntilMembers: Int) = {
+    Props(classOf[ClusterRaftActor], raftActor, keepInitUntilMembers)
   }
 }

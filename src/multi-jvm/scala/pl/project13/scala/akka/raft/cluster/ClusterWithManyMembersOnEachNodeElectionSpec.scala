@@ -5,12 +5,11 @@ import concurrent.duration._
 import akka.cluster.ClusterEvent.{CurrentClusterState, MemberUp}
 import akka.cluster.Cluster
 import akka.actor.{Address, Props}
-import pl.project13.scala.akka.raft.example.cluster.WordConcatClusterRaftActor
 import akka.util.Timeout
 import clusters._
 import pl.project13.scala.akka.raft.ClusterConfiguration
 import pl.project13.scala.akka.raft.protocol._
-import org.scalatest.concurrent.Eventually
+import pl.project13.scala.akka.raft.example.WordConcatRaftActor
 
 abstract class ClusterWithManyMembersOnEachNodeElectionSpec extends RaftClusterSpec(ThreeNodesCluster)
   with ImplicitSender {
@@ -40,16 +39,19 @@ abstract class ClusterWithManyMembersOnEachNodeElectionSpec extends RaftClusterS
 
     (1 to initialParticipants) map { idx =>
       runOn(nodes(idx)) {
-        system.actorOf(Props[WordConcatClusterRaftActor], s"member-$idx")
+        val raftActor = system.actorOf(Props[WordConcatRaftActor], s"raft-$idx")
+        system.actorOf(ClusterRaftActor.props(raftActor, initialParticipants), s"member-$idx")
       }
     }
 
     // start additional members
     runOn(first) {
-      system.actorOf(Props[WordConcatClusterRaftActor], "member-4")
+      val raftActor = system.actorOf(Props[WordConcatRaftActor], s"raft-4")
+      system.actorOf(ClusterRaftActor.props(raftActor, initialParticipants), s"member-4")
     }
     runOn(second) {
-      system.actorOf(Props[WordConcatClusterRaftActor], "member-5")
+      val raftActor = system.actorOf(Props[WordConcatRaftActor], s"raft-5")
+      system.actorOf(ClusterRaftActor.props(raftActor, initialParticipants), s"member-5")
     }
 
     testConductor.enter("started-additional-members")

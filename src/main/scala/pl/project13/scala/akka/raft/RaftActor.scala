@@ -54,7 +54,7 @@ abstract class RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
 
   startWith(Init, Meta.initial)
 
-  when(Init)(awaitInitialConfigurationBehavior)
+  when(Init)(initialConfigurationBehavior)
 
   when(Follower)(followerBehavior orElse snapshottingBehavior orElse clusterManagementBehavior)
 
@@ -63,6 +63,10 @@ abstract class RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
   when(Leader)(leaderBehavior orElse snapshottingBehavior orElse clusterManagementBehavior)
 
   onTransition {
+    case Init -> Follower if stateData.clusterSelf != self =>
+      log.info("Cluster self != self => Running clustered via a proxy.")
+      resetElectionDeadline()
+
     case Follower -> Candidate =>
       self ! BeginElection
       resetElectionDeadline()
