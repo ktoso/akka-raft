@@ -18,11 +18,10 @@ private[protocol] trait StateMetadata extends Serializable {
     def config: ClusterConfiguration
     def isConfigTransitionInProgress = config.isTransitioning
 
-    val others = config.members filterNot { _ == self }
-
-
     /** Since I'm the Leader "everyone but myself" */
-    def membersExceptSelf(implicit self: ActorRef) = config.members filterNot { _ == self}
+    def membersExceptSelf = config.members filterNot { _ == self }
+
+    def members = config.members
 
     /** A member can only vote once during one Term */
     def canVoteIn(term: Term) = term >= currentTerm && votes.get(term).isEmpty
