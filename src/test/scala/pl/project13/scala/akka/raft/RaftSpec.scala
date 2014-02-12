@@ -14,7 +14,8 @@ import scala.concurrent.duration.FiniteDuration
  * @param callingThreadDispatcher if true, will run using one thread. Use this for FSM tests, otherwise set to false to
  *                                enable a "really threading" dispatcher (see config for `raft-dispatcher`).
  */
-abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit(ActorSystem("raft-test"))
+abstract class RaftSpec(callingThreadDispatcher: Boolean = true, _system: Option[ActorSystem] = None)
+  extends TestKit(_system getOrElse ActorSystem("raft-test"))
   with ImplicitSender with Eventually
   with FlatSpecLike with Matchers with BeforeAndAfterAll with BeforeAndAfterEach {
 
@@ -35,9 +36,9 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true) extends TestKit
 
   def initialMembers: Int
 
-  val config = system.settings.config
-  val electionTimeoutMin = config.getDuration("akka.raft.election-timeout.min", TimeUnit.MILLISECONDS).millis
-  val electionTimeoutMax = config.getDuration("akka.raft.election-timeout.max", TimeUnit.MILLISECONDS).millis
+  lazy val config = system.settings.config
+  lazy val electionTimeoutMin = config.getDuration("akka.raft.election-timeout.min", TimeUnit.MILLISECONDS).millis
+  lazy val electionTimeoutMax = config.getDuration("akka.raft.election-timeout.max", TimeUnit.MILLISECONDS).millis
 
   implicit var probe: TestProbe = _
 

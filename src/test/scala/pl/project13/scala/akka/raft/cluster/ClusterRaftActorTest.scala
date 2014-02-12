@@ -1,17 +1,11 @@
 package pl.project13.scala.akka.raft.cluster
 
-import org.scalatest.{Matchers, FlatSpec}
-import pl.project13.scala.akka.raft.RaftSpec
-import akka.actor.{ActorSystem, Kill}
-import com.typesafe.config.ConfigFactory
+import pl.project13.scala.akka.raft.ClusterRaftSpec
+import akka.actor.Kill
 
-class ClusterRaftActorTest(_system: ActorSystem) extends RaftSpec(false, Some(_system)) {
+class ClusterRaftActorTest extends ClusterRaftSpec {
 
   def initialMembers: Int = 1
-
-  def this() {
-    this(ActorSystem.apply("rem-syst", ConfigFactory.parseResources("cluster.conf").withFallback(ConfigFactory.load())))
-  }
 
   behavior of "ClusterRaftActor"
 
