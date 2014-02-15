@@ -6,7 +6,6 @@ import protocol._
 import concurrent.duration._
 import scala.concurrent.forkjoin.ThreadLocalRandom
 import scala.collection.immutable.Set
-import scala.concurrent.Future
 
 /**
  * This actor hides the complexity of being a raft client from you (for example the fact of having to talk with the Leader,
@@ -20,7 +19,7 @@ import scala.concurrent.Future
  * Note to self, I think a proxy one will be easier to implement, because we can delay sending msgs, until we get info
  * that a leader was selected, and it's easier to retry sending hm hm... We'll see.
  *
- * @param raftMembersPath actor path used to select raft cluster members
+ * @param raftMembersPath actor path used to select raft cluster members (suffix it with `*` to glob for many actors)
  */
 class RaftClientActor(raftMembersPath: ActorPath) extends Actor with ActorLogging with Stash {
 
@@ -38,12 +37,12 @@ class RaftClientActor(raftMembersPath: ActorPath) extends Actor with ActorLoggin
   def receive = {
 
     // leader handling
-    case LeaderIs(Some(newLeader)) =>
+    case LeaderIs(Some(newLeader), maybeMsg) =>
       log.info("Member {} informed RaftClient that Leader is {} (previously assumed: {})", sender(), newLeader, leader)
       leader = Some(newLeader)
       unstashAll()
 
-    case LeaderIs(None) =>
+    case LeaderIs(None, maybeMsg) =>
       log.info("Member {} thinks there is no Leader currently in the raft cluster", sender())
       self ! FindLeader
 
@@ -64,16 +63,24 @@ class RaftClientActor(raftMembersPath: ActorPath) extends Actor with ActorLoggin
       log.warning("null sent as message to {}, ignoring!", simpleName(this))
       // ignore...
 
+    case wrapped: ClientMessage[_] =>
+      proxyOrStash(wrapped.cmd, wrapped.client)
+      
     case msg =>
-      println("msg.getClass = " + msg.getClass)
-      leader match {
-        case Some(l) =>
-          log.info("Proxying message {} from {} to currently assumed leader {}.", msg, sender(), l)
-          l.tell(ClientMessage(sender(), msg), sender())
-        case _ =>
+      proxyOrStash(msg, sender())
+  }
+
+
+  /** @param userActor end-user actor whom for we're proxying this command */
+  def proxyOrStash(msg: Any, userActor: AnyRef) {
+    leader match {
+      case Some(l) =>
+        log.info("Proxying message {} from {} to currently assumed leader {}.", msg, sender(), l)
+        l.tell(ClientMessage(sender(), msg), sender())
+      case _ =>
         log.info("No leader in cluster, stashing client message of type {} from {}. Will re-send once leader elected.", msg.getClass, sender())
         stash()
-      }
+    }
   }
 
   private def askAboutLeader(member: ActorRef) {

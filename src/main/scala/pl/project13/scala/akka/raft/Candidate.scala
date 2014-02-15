@@ -11,6 +11,12 @@ private[raft] trait Candidate {
   protected def raftConfig: RaftConfig
 
   val candidateBehavior: StateFunction = {
+    // message from client, tell it that we know of no leader
+    case Event(msg: ClientMessage[Command], m: ElectionMeta) =>
+      log.info("Candidate got {} from client; Respond with anarchy - there is no leader.", msg)
+      sender() ! LeaderIs(None, Some(msg))
+      stay()
+
     // election
     case Event(BeginElection, m: ElectionMeta) =>
       if (m.config.members.isEmpty) {

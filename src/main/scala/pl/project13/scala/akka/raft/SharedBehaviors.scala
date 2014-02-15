@@ -66,9 +66,9 @@ trait SharedBehaviors {
 
     case Event(WhoIsTheLeader, m: Metadata) =>
       stateName match {
-        case Leader   => sender() ! LeaderIs(Some(m.clusterSelf))
-        case Follower => sender() ! LeaderIs(recentlyContactedByLeader)
-        case _        => sender() ! LeaderIs(None)
+        case Leader   => sender() ! LeaderIs(Some(m.clusterSelf), None)
+        case Follower => sender() ! LeaderIs(recentlyContactedByLeader, None)
+        case _        => sender() ! LeaderIs(None, None)
       }
 
       stay()

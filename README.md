@@ -54,7 +54,7 @@ class WordConcatRaftActor extends RaftActor {
 
 // ...
 
-val members = (1 to 3) map { i => system.actorOf(Props[WordConcatRaftActor], name = s"raft-raft-member-$i") }
+val members = (1 to 3) map { i => system.actorOf(Props[WordConcatRaftActor], name = s"raft-member-$i") }
 val clusterConfiguration = ClusterConfiguration(raftConfiguration.members + additionalActor) // 0, 1
 
 members foreach { _ ! ChangeConfiguration(clusterConfiguration)

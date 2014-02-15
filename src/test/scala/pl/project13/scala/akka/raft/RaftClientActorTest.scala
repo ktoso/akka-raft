@@ -12,7 +12,7 @@ class RaftClientActorTest extends RaftSpec(callingThreadDispatcher = false) {
 
   val initialMembers = 3
 
-  it should "should find out Leader of cluster, when pointed to any member of it (already elected leader)" in {
+  it should "find out Leader of cluster, when pointed to any member of it (already elected leader)" in {
     // given
     subscribeElectedLeader()
     awaitElectedLeader()

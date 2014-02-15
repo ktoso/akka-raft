@@ -54,14 +54,19 @@ private[protocol] trait RaftProtocol extends Serializable {
   }
 
   /**
-   * Used by non-Leaders to notify [[pl.project13.scala.akka.raft.RaftClientActor]] actors that they're sending their requests to a non-leader, and
+   * Used by Members to notify [[pl.project13.scala.akka.raft.RaftClientActor]] actors that they're sending their requests to a non-leader, and
    * that they should update their internal `leader` ActorRef to the given one.
    *
    * Upon receive of such message, all further communication should be done with the given actorRef.
    *
    * @see §8 - Client Interaction
+   *      
+   * @param ref the leader's ActorRef if known by the contacted member (or None if unknown, or the member is just candidating to become the new Leader)
+   * @param msg if this message is sent in response to a client sending `msg` to a Follower or Candidate,
+   *            they could not take the write, and the client must retry sending this message once it knows the Leader's ActorRef.
+   *            To ease this, the "rejected" message will be carried in this parameter.
    */
-  case class LeaderIs(ref: Option[ActorRef]) extends Message[Raft]
+  case class LeaderIs(ref: Option[ActorRef], msg: Option[Any]) extends Message[Raft]
   case object WhoIsTheLeader extends Message[Raft]
 
 
