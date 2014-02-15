@@ -13,16 +13,7 @@ private[raft] trait Follower {
 
   protected def raftConfig: RaftConfig
 
-  /** Used when a client contacts this Follower, instead of the Leader; so we redirect him to the Leader. */
-  var recentlyContactedByLeader: Option[ActorRef] = None 
-  
   val followerBehavior: StateFunction = {
-    // message from client, tell it about the last leader we've took a write from
-    case Event(msg: ClientMessage[Command], m: Meta) =>
-      log.info("Follower got {} from client; Respond with last Leader that took write from: {}", msg, recentlyContactedByLeader)
-      sender() ! LeaderIs(recentlyContactedByLeader)
-      stay()
-
     // election
     case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: Meta)
       if m.canVoteIn(term) =>

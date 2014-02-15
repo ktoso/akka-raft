@@ -20,7 +20,8 @@ import akka.actor._
  *
  * @param keepInitUntilFound keeps underlying `raftActor` in `Init` state, until this number of other raft actors has been auto-discovered
  */
-class ClusterRaftActor(raftActor: ActorRef, keepInitUntilFound: Int) extends Actor with ActorLogging {
+class ClusterRaftActor(raftActor: ActorRef, keepInitUntilFound: Int) extends Actor with ActorLogging
+  with ClusterRaftGrouping {
 
   val cluster = Cluster(context.system)
 
@@ -31,24 +32,6 @@ class ClusterRaftActor(raftActor: ActorRef, keepInitUntilFound: Int) extends Act
   import context.dispatcher
 
   val identifyTimeout = raftConfig.clusterAutoDiscoveryIdentifyTimeout
-
-  // user overrideable in order to support custom raft groups
-
-  /**
-   * ActorPath where to look on remote members for raft actors, when a new node joins the cluster.
-   *
-   * Defaults to: `RootActorPath(nodeAddress) / user / member-*`
-   */
-  def raftMembersPath(nodeAddress: Address): ActorPath = RootActorPath(nodeAddress) / "user" / "member-*" // todo make these abstract
-
-  /**
-   * Only nodes with this role will participate in this raft cluster.
-   *
-   * Detaults to `"raft"`, but you can override it in order to support multiple raft clusters in the same actor system
-   */
-  def raftGroupRole: String = "raft" // todo make these abstract
-
-  // end of user overrideable
 
   /**
    * Used to keep track if we still need to retry sending Identify to an address.

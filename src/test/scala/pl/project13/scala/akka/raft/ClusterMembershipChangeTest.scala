@@ -23,7 +23,7 @@ class ClusterMembershipChangeTest extends RaftSpec(callingThreadDispatcher = fal
     val initialLeader = leader()
 
     // when
-    val additionalActor = createActor(s"member-${initialMembers + 1}")
+    val additionalActor = createActor(s"raft-member-${initialMembers + 1}")
     val newConfiguration = ClusterConfiguration(raftConfiguration.members + additionalActor) // 0, 1
 
     initialLeader ! ChangeConfiguration(newConfiguration)
@@ -48,7 +48,7 @@ class ClusterMembershipChangeTest extends RaftSpec(callingThreadDispatcher = fal
       followers() should have length 5
     }
 
-    info("After adding member-6, and configuration change: ")
+    info("After adding raft-member-6, and configuration change: ")
     infoMemberStates()
   }
 

@@ -32,7 +32,7 @@ abstract class ClusterRoleAwarenessSpec extends RaftClusterSpec(FourNodesOnlyTwo
     (1 to initialParticipants) map { idx =>
       runOn(nodes(idx)) {
         val raftActor = system.actorOf(Props[WordConcatRaftActor], s"raft-$idx")
-        system.actorOf(ClusterRaftActor.props(raftActor, initialParticipants), s"member-$idx")
+        system.actorOf(ClusterRaftActor.props(raftActor, initialParticipants), s"raft-member-$idx")
       }
     }
 

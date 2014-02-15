@@ -40,18 +40,18 @@ abstract class ClusterWithManyMembersOnEachNodeElectionSpec extends RaftClusterS
     (1 to initialParticipants) map { idx =>
       runOn(nodes(idx)) {
         val raftActor = system.actorOf(Props[WordConcatRaftActor], s"raft-$idx")
-        system.actorOf(ClusterRaftActor.props(raftActor, initialParticipants), s"member-$idx")
+        system.actorOf(ClusterRaftActor.props(raftActor, initialParticipants), s"raft-member-$idx")
       }
     }
 
     // start additional members
     runOn(first) {
       val raftActor = system.actorOf(Props[WordConcatRaftActor], s"raft-4")
-      system.actorOf(ClusterRaftActor.props(raftActor, initialParticipants), s"member-4")
+      system.actorOf(ClusterRaftActor.props(raftActor, initialParticipants), s"raft-member-4")
     }
     runOn(second) {
       val raftActor = system.actorOf(Props[WordConcatRaftActor], s"raft-5")
-      system.actorOf(ClusterRaftActor.props(raftActor, initialParticipants), s"member-5")
+      system.actorOf(ClusterRaftActor.props(raftActor, initialParticipants), s"raft-member-5")
     }
 
     testConductor.enter("started-additional-members")

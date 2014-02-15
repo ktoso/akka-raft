@@ -47,12 +47,14 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true, _system: Option
   override def beforeAll() {
     super.beforeAll()
 
-    (1 to initialMembers).toList foreach { i => createActor(s"member-$i") }
+    (1 to initialMembers).toList foreach { i => createActor(s"raft-member-$i") }
 
     raftConfiguration = ClusterConfiguration(_members)
     _members foreach { _ ! ChangeConfiguration(raftConfiguration) }
   }
 
+
+  def testRaftMembersPath = system / "raft-member-*"
 
   /**
    * Creates an Actor which uses either the CallingThreadDispatcher, or a "real" (raft-dispatcher) with proper parallelism.

@@ -45,7 +45,7 @@ abstract class SmallClusterElectionSpec extends RaftClusterSpec(ThreeNodesCluste
     (1 to initialParticipants) map { idx =>
       runOn(nodes(idx)) {
         val raftActor = system.actorOf(Props[WordConcatRaftActor], s"small-raft-$idx")
-        system.actorOf(ClusterRaftActor.props(raftActor, initialParticipants), s"member-$idx")
+        system.actorOf(ClusterRaftActor.props(raftActor, initialParticipants), s"raft-member-$idx")
       }
     }
 

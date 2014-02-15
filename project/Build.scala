@@ -13,6 +13,7 @@ object ApplicationBuild extends Build {
   import Dependencies._
   import Resolvers._
 
+  val debugInUse = SettingKey[Boolean]("debug-in-use", "debug is used")
 
   lazy val akkaRaft = Project(appName, file("."))
     .configs(MultiJvm)

@@ -48,7 +48,7 @@ abstract class ClusterIdentifyOnIdentifyDroppingNetworkSpec extends RaftClusterS
     (1 to initialParticipants) map { idx =>
       runOn(nodes(idx)) {
         val wordsActor = system.actorOf(Props[WordConcatRaftActor], s"flaky-words-$idx")
-        system.actorOf(Props(classOf[OnFlakyClusterRaftActor], wordsActor, initialParticipants), s"member-$idx")
+        system.actorOf(Props(classOf[OnFlakyClusterRaftActor], wordsActor, initialParticipants), s"raft-raft-member-$idx")
       }
     }
 

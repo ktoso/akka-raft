@@ -11,13 +11,6 @@ private[raft] trait Candidate {
   protected def raftConfig: RaftConfig
 
   val candidateBehavior: StateFunction = {
-    // message from client, tell it that we know of no leader
-    // todo that's what I meant about the types being under-used... Todo refactor so we can clearly check this!
-    case Event(msg: ClientMessage[Command], m: ElectionMeta) if msg.cmd.isInstanceOf[AppendEntries[Command]] =>
-      log.info("Candidate got {} from client; Respond with anarchy - there is no leader.", msg)
-      sender() ! LeaderIs(None)
-      stay()
-
     // election
     case Event(BeginElection, m: ElectionMeta) =>
       if (m.config.members.isEmpty) {

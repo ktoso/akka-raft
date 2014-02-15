@@ -10,9 +10,8 @@ private[protocol] trait RaftProtocol extends Serializable {
 
   /**
    * Wrap messages you want to send to the underlying replicated state machine
-   * TODO remove client param
    */
-  case class ClientMessage[T](@deprecated client: ActorRef, cmd: T) extends RaftMessage
+  case class ClientMessage[T](client: ActorRef, cmd: T) extends RaftMessage
 
 
   /**
@@ -63,6 +62,7 @@ private[protocol] trait RaftProtocol extends Serializable {
    * @see §8 - Client Interaction
    */
   case class LeaderIs(ref: Option[ActorRef]) extends Message[Raft]
+  case object WhoIsTheLeader extends Message[Raft]
 
 
   /**

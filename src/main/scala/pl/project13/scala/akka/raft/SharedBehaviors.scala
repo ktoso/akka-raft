@@ -9,6 +9,9 @@ trait SharedBehaviors {
 
   private[raft] implicit val raftDispatcher = context.system.dispatchers.lookup("raft-dispatcher")
 
+  /** Used when a client contacts this Follower, instead of the Leader; so we redirect him to the Leader. */
+  var recentlyContactedByLeader: Option[ActorRef] = None
+
   /** Waits for initial cluster configuration. Step needed before we can start voting for a Leader. */
   private[raft] lazy val initialConfigurationBehavior: StateFunction = {
 
@@ -60,6 +63,15 @@ trait SharedBehaviors {
 
   /** Handles adding / removing raft members; Should be handled in every state */
   private[raft] lazy val clusterManagementBehavior: StateFunction = {
+
+    case Event(WhoIsTheLeader, m: Metadata) =>
+      stateName match {
+        case Leader   => sender() ! LeaderIs(Some(m.clusterSelf))
+        case Follower => sender() ! LeaderIs(recentlyContactedByLeader)
+        case _        => sender() ! LeaderIs(None)
+      }
+
+      stay()
 
     // enter joint consensus phase of configuration comitting
     case Event(ChangeConfiguration(newConfiguration), m: Metadata) =>
