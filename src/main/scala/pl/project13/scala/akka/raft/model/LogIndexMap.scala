@@ -61,7 +61,6 @@ case class LogIndexMap private (private var backing: Map[ActorRef, Int], private
       // this guarantees safety once we switch to the new configuration, and oldMembers go away. More details in §6.
       val oldQuorum = indexOnMajority(oldMembers)
       val newQuorum = indexOnMajority(newMembers)
-//      math.min(oldQuorum, newQuorum)
 
       if (oldQuorum == -1) newQuorum
       else if (newQuorum == -1) oldQuorum

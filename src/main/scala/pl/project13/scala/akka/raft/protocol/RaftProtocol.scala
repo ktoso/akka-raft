@@ -67,7 +67,7 @@ private[protocol] trait RaftProtocol extends Serializable {
    *            To ease this, the "rejected" message will be carried in this parameter.
    */
   case class LeaderIs(ref: Option[ActorRef], msg: Option[Any]) extends Message[Raft]
-  case object WhoIsTheLeader extends Message[Raft]
+  case object WhoIsTheLeader                                   extends Message[Raft]
 
 
   /**

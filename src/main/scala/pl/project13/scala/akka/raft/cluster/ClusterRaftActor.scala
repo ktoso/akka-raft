@@ -99,6 +99,10 @@ class ClusterRaftActor(raftActor: ActorRef, keepInitUntilFound: Int) extends Act
       log.info("Node detected as unreachable: {}", member)
       // todo remove from raft ???
 
+    case MemberRemoved(member, previousStatus) if member == self =>
+      log.info("This member was removed from cluster, stopping self (prev status: {})", previousStatus)
+      context stop self
+
     case MemberRemoved(member, previousStatus) =>
       log.info("Member is Removed: {} after {}", member.address, previousStatus)
       // todo remove from raft ???

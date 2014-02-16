@@ -99,7 +99,6 @@ private[raft] trait Leader {
   }
 
   def startHeartbeat(m: LeaderMeta) {
-//  def startHeartbeat(currentTerm: Term, members: Set[ActorRef]) {
     sendHeartbeat(m)
     log.info("Starting hearbeat, with interval: {}", heartbeatInterval)
     setTimer(HeartbeatTimerName, SendHeartbeat, heartbeatInterval, repeat = true)
@@ -156,7 +155,7 @@ private[raft] trait Leader {
     val willCommit = indexOnMajority > replicatedLog.committedIndex
 
     if (willCommit) log.info("Consensus for persisted index: {}. (Comitted index: {}, will commit now: {})", indexOnMajority, replicatedLog.committedIndex, willCommit)
-    else log.debug("Consensus for persisted index: {}. (Comitted index: {}, will commit now: {})", indexOnMajority, replicatedLog.committedIndex, willCommit)
+    else log.info("Consensus for persisted index: {}. (Comitted index: {})", indexOnMajority, replicatedLog.committedIndex)
 
     if (willCommit) {
       val entries = replicatedLog.between(replicatedLog.committedIndex, indexOnMajority)

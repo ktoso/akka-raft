@@ -53,7 +53,9 @@ private[raft] trait Follower {
   }
   
 
-  def appendEntries(msg: AppendEntries[Command], m: Meta): State =
+  def appendEntries(msg: AppendEntries[Command], m: Meta): State = {
+    implicit val self = m.clusterSelf // todo this is getting pretty crap, revert to having Cluster awareness a trait IMO
+
     if (leaderIsLagging(msg, m)) {
       if (msg.isNotHeartbeat) {
         log.info("Rejecting write (Leader is lagging) of: " + msg + "; " + replicatedLog)
@@ -73,6 +75,7 @@ private[raft] trait Follower {
       val metaWithUpdatedTerm = meta.copy(currentTerm = replicatedLog.lastTerm)
       acceptHeartbeat() using metaWithUpdatedTerm
     }
+  }
 
   def leaderIsLagging(msg: AppendEntries[Command], m: Meta): Boolean =
     msg.term < m.currentTerm

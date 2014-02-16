@@ -66,11 +66,10 @@ trait SharedBehaviors {
 
     case Event(WhoIsTheLeader, m: Metadata) =>
       stateName match {
-        case Leader   => sender() ! LeaderIs(Some(m.clusterSelf), None)
-        case Follower => sender() ! LeaderIs(recentlyContactedByLeader, None)
-        case _        => sender() ! LeaderIs(None, None)
+        case Follower  => recentlyContactedByLeader foreach { _ forward WhoIsTheLeader } // needed in order to expose only "clusterSelfs"
+        case Leader    => sender() ! LeaderIs(Some(m.clusterSelf), None)
+        case _         => sender() ! LeaderIs(None, None)
       }
-
       stay()
 
     // enter joint consensus phase of configuration comitting

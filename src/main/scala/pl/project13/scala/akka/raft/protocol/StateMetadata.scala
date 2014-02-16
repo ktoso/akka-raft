@@ -11,7 +11,13 @@ private[protocol] trait StateMetadata extends Serializable {
   type Candidate = ActorRef
 
   sealed trait Metadata {
-    def clusterSelf: ActorRef
+    /**
+     * A raft cluster proxy aware version of `self` - should always be used it `self` is about to be exposed to external actors.
+     *
+     * In practice, this will be `self` if __not__ running in clustered mode, and the [[pl.project13.scala.akka.raft.cluster.ClusterRaftActor]]
+     * `ActorRef` that proxies this actor when in a clustered enviroment.
+     */
+    implicit def clusterSelf: ActorRef // todo rethink if needed
     def votes: Map[Term, Candidate]
     def currentTerm: Term
 

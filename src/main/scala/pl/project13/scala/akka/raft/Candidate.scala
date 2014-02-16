@@ -63,7 +63,7 @@ private[raft] trait Candidate {
 
       if (leaderIsAhead) {
         log.info("Reverting to Follower, because got AppendEntries from Leader in {}, but am in {}", append.term, m.currentTerm)
-        m.clusterSelf.tell(append, sender())
+        m.clusterSelf forward append
         goto(Follower) using m.forFollower
       } else {
         stay()

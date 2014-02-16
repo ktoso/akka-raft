@@ -1,7 +1,6 @@
 package pl.project13.scala.akka.raft
 
 import org.scalatest.time.{Seconds, Millis, Span}
-import akka.actor.Props
 import pl.project13.scala.akka.raft.example.protocol._
 
 class RaftClientActorTest extends RaftSpec(callingThreadDispatcher = false) {
@@ -19,7 +18,7 @@ class RaftClientActorTest extends RaftSpec(callingThreadDispatcher = false) {
     info("Cluster state when joining raft-client: ")
     infoMemberStates()
 
-    val client = system.actorOf(Props(classOf[RaftClientActor], testRaftMembersPath), "raft-client")
+    val client = system.actorOf(RaftClientActor.props(testRaftMembersPath), "raft-client")
 
     client ! AppendWord("I")
     client ! AppendWord("like")

@@ -43,7 +43,7 @@ class WordConcatRaftActor extends RaftActor {
       words +: word
       log.info("Applied command [{}], full words is: {}", command, words)
 
-      word
+      word // will be sent back to original actor, who sent the AppendWord command
 
     case GetWords =>
       val res = words.toList
@@ -99,6 +99,17 @@ class SnapshottingWordConcatRaftActor extends RaftActor {
     Future.successful(Some(RaftSnapshot(meta, words)))
 }
 ```
+
+RaftClientActor
+---------------
+
+In the above examples, the **client** implementation is very naive, and assumes you have some way
+of finding out who the current Leader is (as this is a requirement to interact with any Raft cluster).
+Thankfully, you can use the provided `RaftClientActor`, which works like a proxy that forwards all your messages
+to the current _Leader_, or stashes them if the cluster has no _Leader_ at the moment (is undergoing an election) and
+sends the messages once the Leader becomes available.
+
+
 
 
 License
