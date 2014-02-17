@@ -20,6 +20,7 @@ import akka.actor._
  *
  * @param keepInitUntilFound keeps underlying `raftActor` in `Init` state, until this number of other raft actors has been auto-discovered
  */
+// todo change the impl to make this REALLY transparent
 class ClusterRaftActor(raftActor: ActorRef, keepInitUntilFound: Int) extends Actor with ActorLogging
   with ClusterRaftGrouping {
 
