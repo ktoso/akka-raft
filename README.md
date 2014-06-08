@@ -17,7 +17,7 @@ Implementation wise, all parts of the raft whitepaper are covered:
 Disclaimer
 ----------
 
-**This project is still work in progress and has not been stress tested (athough it is tested on multiple nodes already)**
+**This project is still work in progress (treat it as EARLY PREVIEW) and has not been stress tested (athough it is tested on multiple nodes already).** Use at own risk.
 
 Basic info
 ----------
