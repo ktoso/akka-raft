@@ -8,7 +8,7 @@ object ApplicationBuild extends Build {
 
   val appName = "akka-raft"
   val appVersion = "1.0-SNAPSHOT"
-  val appScalaVersion = "2.10.2"
+  val appScalaVersion = "2.11.2"
 
   import Dependencies._
   import Resolvers._
@@ -31,17 +31,23 @@ object ApplicationBuild extends Build {
      parallelExecution in Test := false,
      // make sure that MultiJvm tests are executed by the default test target
      executeTests in Test <<=
-       ((executeTests in Test), (executeTests in MultiJvm)) map {
-         case ((_, testResults), (_, multiJvmResults))  =>
-           val results = testResults ++ multiJvmResults
-           (Tests.overall(results.values), results)
+       (executeTests in Test, executeTests in MultiJvm) map {
+         case (testResults, multiJvmResults)  =>
+           val overall =
+             if (testResults.overall.id < multiJvmResults.overall.id)
+               multiJvmResults.overall
+             else
+               testResults.overall
+           Tests.Output(overall,
+             testResults.events ++ multiJvmResults.events,
+             testResults.summaries ++ multiJvmResults.summaries)
      }
    )
 
 }
 
 object Dependencies {
-    val akkaVersion = "2.3-SNAPSHOT"
+    val akkaVersion = "2.3.4"
     val generalDependencies = Seq(
       "com.typesafe.akka" %% "akka-actor"     % akkaVersion,
       "com.typesafe.akka" %% "akka-slf4j"     % akkaVersion,
@@ -53,7 +59,7 @@ object Dependencies {
       "com.typesafe.akka" %% "akka-multi-node-testkit" % akkaVersion % "test",
 
       "org.mockito"        % "mockito-core"   % "1.9.5"     % "test",
-      "org.scalatest"     %% "scalatest"      % "2.0"       % "test"
+      "org.scalatest"     %% "scalatest"      % "2.2.1"     % "test"
     )
   }
 
