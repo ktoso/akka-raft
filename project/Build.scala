@@ -1,8 +1,4 @@
-import sbt._
-import Keys._
 
-import com.typesafe.sbt.SbtMultiJvm
-import com.typesafe.sbt.SbtMultiJvm.MultiJvmKeys.MultiJvm
 
 object ApplicationBuild extends Build {
 
@@ -19,9 +15,11 @@ object ApplicationBuild extends Build {
     .configs(MultiJvm)
     .settings(multiJvmSettings: _*)
     .settings(
+      unmanagedSourceDirectories in Test += baseDirectory.value / "src" / "multi-jvm" / "scala",
       resolvers ++= additionalResolvers,
       libraryDependencies ++= generalDependencies,
-      scalaVersion := appScalaVersion
+      scalaVersion := appScalaVersion,
+      scalacOptions ++= Seq("-unchecked","-deprecation")
     )
 
   lazy val multiJvmSettings = SbtMultiJvm.multiJvmSettings ++ Seq(
@@ -59,7 +57,9 @@ object Dependencies {
       "com.typesafe.akka" %% "akka-multi-node-testkit" % akkaVersion % "test",
 
       "org.mockito"        % "mockito-core"   % "1.9.5"     % "test",
-      "org.scalatest"     %% "scalatest"      % "2.2.1"     % "test"
+      "org.scalatest"     %% "scalatest"      % "2.2.1"     % "test",
+      "org.scala-lang"     % "scala-reflect"  % "2.11.2",
+      "org.scala-lang"     % "scala-library"  % "2.11.2"
     )
   }
 
