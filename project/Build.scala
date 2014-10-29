@@ -8,10 +8,9 @@ object ApplicationBuild extends Build {
 
   val appName = "akka-raft"
   val appVersion = "1.0-SNAPSHOT"
-  val appScalaVersion = "2.10.2"
+  val appScalaVersion = "2.10.4"
 
   import Dependencies._
-  import Resolvers._
 
   val debugInUse = SettingKey[Boolean]("debug-in-use", "debug is used")
 
@@ -19,7 +18,6 @@ object ApplicationBuild extends Build {
     .configs(MultiJvm)
     .settings(multiJvmSettings: _*)
     .settings(
-      resolvers ++= additionalResolvers,
       libraryDependencies ++= generalDependencies,
       scalaVersion := appScalaVersion
     )
@@ -31,17 +29,16 @@ object ApplicationBuild extends Build {
      parallelExecution in Test := false,
      // make sure that MultiJvm tests are executed by the default test target
      executeTests in Test <<=
-       ((executeTests in Test), (executeTests in MultiJvm)) map {
-         case ((_, testResults), (_, multiJvmResults))  =>
-           val results = testResults ++ multiJvmResults
-           (Tests.overall(results.values), results)
-     }
+       ((executeTests in Test), (executeTests in MultiJvm)).map{
+         case (outputOfTests, outputOfMultiJVMTests)  =>
+           Tests.Output(Seq(outputOfTests.overall, outputOfMultiJVMTests.overall).sorted.reverse.head, outputOfTests.events ++ outputOfMultiJVMTests.events, outputOfTests.summaries ++ outputOfMultiJVMTests.summaries)
+      }
    )
 
 }
 
 object Dependencies {
-    val akkaVersion = "2.3-SNAPSHOT"
+    val akkaVersion = "2.3.6"
     val generalDependencies = Seq(
       "com.typesafe.akka" %% "akka-actor"     % akkaVersion,
       "com.typesafe.akka" %% "akka-slf4j"     % akkaVersion,
@@ -56,10 +53,3 @@ object Dependencies {
       "org.scalatest"     %% "scalatest"      % "2.0"       % "test"
     )
   }
-
-object Resolvers {
-  val additionalResolvers = Seq(
-    "typesafe snapshots" at "http://repo.akka.io/snapshots/"
-  )
-
-}
