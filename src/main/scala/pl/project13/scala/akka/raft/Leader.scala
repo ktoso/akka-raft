@@ -8,7 +8,7 @@ import config.RaftConfig
 
 private[raft] trait Leader {
   this: RaftActor =>
-  
+
   protected def raftConfig: RaftConfig
 
   private val HeartbeatTimerName = "heartbeat-timer"
@@ -110,7 +110,7 @@ private[raft] trait Leader {
   }
 
   def replicateLog(m: LeaderMeta) {
-    m.membersExceptSelf foreach { member =>
+    m.membersExceptSelf filter(_ != self) foreach { member =>
       // todo remove me
 //      log.info("sending: {} to {}", AppendEntries(m.currentTerm, replicatedLog, fromIndex = nextIndex.valueFor(member), leaderCommitId = replicatedLog.committedIndex), member)
 
@@ -159,7 +159,7 @@ private[raft] trait Leader {
 
     if (willCommit) {
       val entries = replicatedLog.between(replicatedLog.committedIndex, indexOnMajority)
-      
+
       entries foreach { entry =>
         handleCommitIfSpecialEntry.applyOrElse(entry, default = handleNormalEntry)
 
