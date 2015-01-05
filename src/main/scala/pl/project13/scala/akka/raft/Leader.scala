@@ -50,6 +50,7 @@ private[raft] trait Leader {
     // rogue Leader handling
     case Event(append: AppendEntries[Command], m: LeaderMeta) if append.term > m.currentTerm =>
       log.info("Leader (@ {}) got AppendEntries from fresher Leader (@ {}), will step down and the Leader will keep being: {}", m.currentTerm, append.term, sender())
+      stopHeartbeat()
       stepDown(m)
 
     case Event(append: AppendEntries[Command], m: LeaderMeta) if append.term <= m.currentTerm =>
@@ -110,7 +111,7 @@ private[raft] trait Leader {
   }
 
   def replicateLog(m: LeaderMeta) {
-    m.membersExceptSelf filter(_ != self) foreach { member =>
+    m.membersExceptSelf foreach { member =>
       // todo remove me
 //      log.info("sending: {} to {}", AppendEntries(m.currentTerm, replicatedLog, fromIndex = nextIndex.valueFor(member), leaderCommitId = replicatedLog.committedIndex), member)
 
