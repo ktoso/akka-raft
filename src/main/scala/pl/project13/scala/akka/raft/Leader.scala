@@ -8,7 +8,7 @@ import config.RaftConfig
 
 private[raft] trait Leader {
   this: RaftActor =>
-  
+
   protected def raftConfig: RaftConfig
 
   private val HeartbeatTimerName = "heartbeat-timer"
@@ -50,6 +50,7 @@ private[raft] trait Leader {
     // rogue Leader handling
     case Event(append: AppendEntries[Command], m: LeaderMeta) if append.term > m.currentTerm =>
       log.info("Leader (@ {}) got AppendEntries from fresher Leader (@ {}), will step down and the Leader will keep being: {}", m.currentTerm, append.term, sender())
+      stopHeartbeat()
       stepDown(m)
 
     case Event(append: AppendEntries[Command], m: LeaderMeta) if append.term <= m.currentTerm =>
@@ -159,7 +160,7 @@ private[raft] trait Leader {
 
     if (willCommit) {
       val entries = replicatedLog.between(replicatedLog.committedIndex, indexOnMajority)
-      
+
       entries foreach { entry =>
         handleCommitIfSpecialEntry.applyOrElse(entry, default = handleNormalEntry)
 

@@ -8,7 +8,6 @@ object ApplicationBuild extends Build {
 
   val appName = "akka-raft"
   val appVersion = "1.0-SNAPSHOT"
-  val appScalaVersion = "2.10.4"
 
   import Dependencies._
 
@@ -18,8 +17,7 @@ object ApplicationBuild extends Build {
     .configs(MultiJvm)
     .settings(multiJvmSettings: _*)
     .settings(
-      libraryDependencies ++= generalDependencies,
-      scalaVersion := appScalaVersion
+      libraryDependencies ++= generalDependencies
     )
 
   lazy val multiJvmSettings = SbtMultiJvm.multiJvmSettings ++ Seq(
@@ -38,7 +36,7 @@ object ApplicationBuild extends Build {
 }
 
 object Dependencies {
-    val akkaVersion = "2.3.6"
+    val akkaVersion = "2.3.8"
     val generalDependencies = Seq(
       "com.typesafe.akka" %% "akka-actor"     % akkaVersion,
       "com.typesafe.akka" %% "akka-slf4j"     % akkaVersion,
@@ -50,6 +48,6 @@ object Dependencies {
       "com.typesafe.akka" %% "akka-multi-node-testkit" % akkaVersion % "test",
 
       "org.mockito"        % "mockito-core"   % "1.9.5"     % "test",
-      "org.scalatest"     %% "scalatest"      % "2.0"       % "test"
+      "org.scalatest"     %% "scalatest"      % "2.2.1"     % "test"
     )
   }
