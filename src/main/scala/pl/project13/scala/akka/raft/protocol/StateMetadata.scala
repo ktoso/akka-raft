@@ -30,7 +30,7 @@ private[protocol] trait StateMetadata extends Serializable {
     def members = config.members
 
     /** A member can only vote once during one Term */
-    def canVoteIn(term: Term) = term >= currentTerm && votes.get(term).isEmpty
+    def canVoteIn(term: Term) = votes.get(term).isEmpty
 
     /** A member can only vote once during one Term */
     def cannotVoteIn(term: Term) = term < currentTerm || votes.get(term).isDefined
@@ -43,13 +43,18 @@ private[protocol] trait StateMetadata extends Serializable {
     config: ClusterConfiguration,
     votes: Map[Term, Candidate]
   ) extends Metadata {
-    
+
     // transition helpers
     def forNewElection: ElectionMeta = ElectionMeta(clusterSelf, currentTerm.next, 0, config, votes)
 
     def withVote(term: Term, candidate: ActorRef) = {
-      copy(votes = votes updated (term, candidate))
+      if (term > currentTerm)
+				copy(currentTerm = term, votes = votes updated (term, candidate))
+			else
+				copy(votes = votes updated (term, candidate))
     }
+
+		def withTerm(term: Term) = copy(currentTerm = term)
 
     def withConfig(conf: ClusterConfiguration): Meta = copy(config = conf)
   }

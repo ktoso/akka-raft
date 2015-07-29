@@ -64,6 +64,15 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
     expectMsg(DeclineCandidate(Term(2)))
   }
 
+	it should "update term number after getting a request with higher term number" in {
+		follower.setState(Follower, data)
+
+		follower ! RequestVote(Term(3), self, Term(3), 3)
+		expectMsg(VoteCandidate(Term(3)))
+
+		follower.stateData.currentTerm shouldBe Term(3)
+	}
+
   it should "become a Candidate if the electionTimeout has elapsed" in {
     // given
     follower.setState(Follower, data)
