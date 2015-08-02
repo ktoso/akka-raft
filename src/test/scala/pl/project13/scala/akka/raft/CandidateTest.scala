@@ -4,6 +4,7 @@ import pl.project13.scala.akka.raft.protocol._
 import akka.testkit.{ImplicitSender, TestFSMRef}
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.concurrent.Eventually
+import scala.concurrent.duration._
 import org.scalatest.time.{Millis, Span}
 import pl.project13.scala.akka.raft.example.WordConcatRaftActor
 import pl.project13.scala.akka.raft.model.{Entry, Term}
@@ -50,7 +51,7 @@ class CandidateTest extends RaftSpec with BeforeAndAfterEach
     }
   }
 
-  it should "go back to Follower state if got message from elected Leader (from later Trerm)" in {
+  it should "go back to Follower state if got message from elected Leader (from later Term)" in {
     // given
     subscribeBeginElection()
 
@@ -71,5 +72,25 @@ class CandidateTest extends RaftSpec with BeforeAndAfterEach
       candidate.underlyingActor.replicatedLog.entries contains entry
     }
   }
+
+	it should "reject candidate if got RequestVote message with a stale term number" in {
+		candidate.setState(Candidate, data)
+
+		candidate ! RequestVote(Term(1), self, Term(1), 1)
+		fishForMessage(max = 5 seconds) {
+			case DeclineCandidate(Term(3)) => true
+			case _ => false
+		}
+	}
+
+	it should "reject candidate if got VoteCandidate message with a stale term number" in {
+		candidate.setState(Candidate, data)
+
+		candidate ! VoteCandidate(Term(1))
+		fishForMessage(max = 5 seconds) {
+			case DeclineCandidate(Term(3)) => true
+			case _ => false
+		}
+	}
 
 }

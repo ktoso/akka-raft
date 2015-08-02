@@ -79,9 +79,9 @@ private[protocol] trait StateMetadata extends Serializable {
 
     def withVoteFor(term: Term, candidate: ActorRef) = copy(votes = votes + (term -> candidate))
 
-    def forLeader: LeaderMeta        = LeaderMeta(clusterSelf, currentTerm, config)
-    def forFollower: Meta            = Meta(clusterSelf, currentTerm, config, Map.empty)
-    def forNewElection: ElectionMeta = this.forFollower.forNewElection
+    def forLeader: LeaderMeta = LeaderMeta(clusterSelf, currentTerm, config)
+    def forFollower(term: Term = currentTerm): Meta = Meta(clusterSelf, term, config, Map.empty)
+    def forNewElection: ElectionMeta = this.forFollower().forNewElection
   }
 
   case class LeaderMeta(
