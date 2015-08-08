@@ -49,12 +49,12 @@ private[protocol] trait StateMetadata extends Serializable {
 
     def withVote(term: Term, candidate: ActorRef) = {
       if (term > currentTerm)
-				copy(currentTerm = term, votes = votes updated (term, candidate))
-			else
-				copy(votes = votes updated (term, candidate))
+        copy(currentTerm = term, votes = votes updated (term, candidate))
+      else
+        copy(votes = votes updated (term, candidate))
     }
 
-		def withTerm(term: Term) = copy(currentTerm = term)
+    def withTerm(term: Term) = copy(currentTerm = term)
 
     def withConfig(conf: ClusterConfiguration): Meta = copy(config = conf)
   }

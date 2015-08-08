@@ -73,24 +73,24 @@ class CandidateTest extends RaftSpec with BeforeAndAfterEach
     }
   }
 
-	it should "reject candidate if got RequestVote message with a stale term number" in {
-		candidate.setState(Candidate, data)
+  it should "reject candidate if got RequestVote message with a stale term number" in {
+    candidate.setState(Candidate, data)
 
-		candidate ! RequestVote(Term(1), self, Term(1), 1)
-		fishForMessage(max = 5 seconds) {
-			case DeclineCandidate(Term(3)) => true
-			case _ => false
-		}
-	}
+    candidate ! RequestVote(Term(1), self, Term(1), 1)
+    fishForMessage(max = 5 seconds) {
+      case DeclineCandidate(Term(3)) => true
+      case _ => false
+    }
+  }
 
-	it should "reject candidate if got VoteCandidate message with a stale term number" in {
-		candidate.setState(Candidate, data)
+  it should "reject candidate if got VoteCandidate message with a stale term number" in {
+    candidate.setState(Candidate, data)
 
-		candidate ! VoteCandidate(Term(1))
-		fishForMessage(max = 5 seconds) {
-			case DeclineCandidate(Term(3)) => true
-			case _ => false
-		}
-	}
+    candidate ! VoteCandidate(Term(1))
+    fishForMessage(max = 5 seconds) {
+      case DeclineCandidate(Term(3)) => true
+      case _ => false
+    }
+  }
 
 }
