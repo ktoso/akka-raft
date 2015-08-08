@@ -1,12 +1,11 @@
 package pl.project13.scala.akka.raft
 
-import scala.collection.immutable
+import pl.project13.scala.akka.raft.config.RaftConfig
+import pl.project13.scala.akka.raft.model._
+import pl.project13.scala.akka.raft.protocol._
 
-import model._
-import protocol._
-import config.RaftConfig
-import akka.actor.ActorRef
 import scala.annotation.tailrec
+import scala.collection.immutable
 
 private[raft] trait Follower {
   this: RaftActor =>
@@ -19,24 +18,24 @@ private[raft] trait Follower {
       sender() ! LeaderIs(recentlyContactedByLeader, Some(msg))
       stay()
 
-		// start of election
+    // start of election
 
-		case Event(msg: RequestVote, m: Meta) if msg.term < m.currentTerm =>
-			log.info("Rejecting RequestVote msg by {} in {}. Received stale {}.", candidate, m.currentTerm, msg.term)
-			candidate ! DeclineCandidate(m.currentTerm)
-			stay()
+    case Event(msg: RequestVote, m: Meta) if msg.term < m.currentTerm =>
+      log.info("Rejecting RequestVote msg by {} in {}. Received stale {}.", candidate, m.currentTerm, msg.term)
+      candidate ! DeclineCandidate(m.currentTerm)
+      stay()
 
     case Event(msg: RequestVote, m: Meta) if msg.term >= m.currentTerm =>
-			val msgTerm = msg.term
-			if (m.canVoteIn(msgTerm)) {
-				log.info("Voting for {} in {}", candidate, msgTerm)
-				candidate ! VoteCandidate(msgTerm)
-				stay() using m.withVote(msgTerm, candidate)
-			} else {
-				log.info("Rejecting RequestVote msg by {} in {}. Already voted for {}", candidate, msgTerm, m.currentTerm, m.votes.get(msgTerm))
-				sender ! DeclineCandidate(msgTerm)
-				stay() using m.withTerm(msgTerm)
-			}
+      val msgTerm = msg.term
+      if (m.canVoteIn(msgTerm)) {
+        log.info("Voting for {} in {}", candidate, msgTerm)
+        candidate ! VoteCandidate(msgTerm)
+        stay() using m.withVote(msgTerm, candidate)
+      } else {
+        log.info("Rejecting RequestVote msg by {} in {}. Already voted for {}", candidate, msgTerm, m.currentTerm, m.votes.get(msgTerm))
+        sender ! DeclineCandidate(msgTerm)
+        stay() using m.withTerm(msgTerm)
+      }
 
     // end of election
 

@@ -32,34 +32,34 @@ private[raft] trait Candidate {
         stay() using includingThisVote.withVoteFor(m.currentTerm, m.clusterSelf)
       }
 
-		case Event(msg: RequestVote, m: ElectionMeta) if msg.term < m.currentTerm =>
-			log.info("Rejecting RequestVote msg by {} in {}. Received stale {}.", candidate, m.currentTerm, msg.term)
-			candidate ! DeclineCandidate(m.currentTerm)
-			stay()
+    case Event(msg: RequestVote, m: ElectionMeta) if msg.term < m.currentTerm =>
+      log.info("Rejecting RequestVote msg by {} in {}. Received stale {}.", candidate, m.currentTerm, msg.term)
+      candidate ! DeclineCandidate(m.currentTerm)
+      stay()
 
-		case Event(msg: RequestVote, m: ElectionMeta) if msg.term > m.currentTerm =>
-			log.info("Received newer {}. Current term is {}. Revert to follower state.", msg.term, m.currentTerm)
-			goto(Follower) using m.forFollower(msg.term)
+    case Event(msg: RequestVote, m: ElectionMeta) if msg.term > m.currentTerm =>
+      log.info("Received newer {}. Current term is {}. Revert to follower state.", msg.term, m.currentTerm)
+      goto(Follower) using m.forFollower(msg.term)
 
     case Event(msg: RequestVote, m: ElectionMeta) =>
-			if (m.canVoteIn(msg.term)) {
-				log.info("Voting for {} in {}.", candidate, m.currentTerm)
-				candidate ! VoteCandidate(m.currentTerm)
-				stay() using m.withVoteFor(m.currentTerm, candidate)
-			} else {
-				log.info("Rejecting RequestVote msg by {} in {}. Already voted for {}", candidate, m.currentTerm, m.votes.get(msg.term))
-				sender ! DeclineCandidate(m.currentTerm)
-				stay()
-			}
+      if (m.canVoteIn(msg.term)) {
+        log.info("Voting for {} in {}.", candidate, m.currentTerm)
+        candidate ! VoteCandidate(m.currentTerm)
+        stay() using m.withVoteFor(m.currentTerm, candidate)
+      } else {
+        log.info("Rejecting RequestVote msg by {} in {}. Already voted for {}", candidate, m.currentTerm, m.votes.get(msg.term))
+        sender ! DeclineCandidate(m.currentTerm)
+        stay()
+      }
 
-		case Event(VoteCandidate(term), m: ElectionMeta) if term < m.currentTerm =>
-			log.info("Rejecting VoteCandidate msg by {} in {}. Received stale {}.", voter(), m.currentTerm, term)
-			voter ! DeclineCandidate(m.currentTerm)
-			stay()
+    case Event(VoteCandidate(term), m: ElectionMeta) if term < m.currentTerm =>
+      log.info("Rejecting VoteCandidate msg by {} in {}. Received stale {}.", voter(), m.currentTerm, term)
+      voter ! DeclineCandidate(m.currentTerm)
+      stay()
 
-		case Event(VoteCandidate(term), m: ElectionMeta) if term > m.currentTerm =>
-			log.info("Received newer {}. Current term is {}. Revert to follower state.", term, m.currentTerm)
-			goto(Follower) using m.forFollower(term)
+    case Event(VoteCandidate(term), m: ElectionMeta) if term > m.currentTerm =>
+      log.info("Received newer {}. Current term is {}. Revert to follower state.", term, m.currentTerm)
+      goto(Follower) using m.forFollower(term)
 
     case Event(VoteCandidate(term), m: ElectionMeta) =>
       val includingThisVote = m.incVote
@@ -73,13 +73,13 @@ private[raft] trait Candidate {
       }
 
     case Event(DeclineCandidate(term), m: ElectionMeta) =>
-			if (term > m.currentTerm) {
-				log.info("Received newer {}. Current term is {}. Revert to follower state.", term, m.currentTerm)
-				goto(Follower) using m.forFollower(term)
-			} else {
-				log.info("Candidate is declined by {} in term {}", sender(), m.currentTerm)
-				stay()
-			}
+      if (term > m.currentTerm) {
+        log.info("Received newer {}. Current term is {}. Revert to follower state.", term, m.currentTerm)
+        goto(Follower) using m.forFollower(term)
+      } else {
+        log.info("Candidate is declined by {} in term {}", sender(), m.currentTerm)
+        stay()
+      }
 
 
     // end of election
