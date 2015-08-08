@@ -19,19 +19,24 @@ private[raft] trait Follower {
       sender() ! LeaderIs(recentlyContactedByLeader, Some(msg))
       stay()
 
-    // election
-    case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: Meta)
-      if m.canVoteIn(term) =>
+		// start of election
 
-      log.info("Voting for {} in {}", candidate, term)
-      sender ! VoteCandidate(m.currentTerm)
+		case Event(msg: RequestVote, m: Meta) if msg.term < m.currentTerm =>
+			log.info("Rejecting RequestVote msg by {} in {}. Received stale {}.", candidate, m.currentTerm, msg.term)
+			candidate ! DeclineCandidate(m.currentTerm)
+			stay()
 
-      stay() using m.withVote(term, candidate)
-
-    case Event(RequestVote(term, candidateId, lastLogTerm, lastLogIndex), m: Meta) =>
-      log.info("Rejecting vote for {}, and {}, currentTerm: {}, already voted for: {}", candidate(), term, m.currentTerm, m.votes.get(term))
-      sender ! DeclineCandidate(m.currentTerm)
-      stay()
+    case Event(msg: RequestVote, m: Meta) if msg.term >= m.currentTerm =>
+			val msgTerm = msg.term
+			if (m.canVoteIn(msgTerm)) {
+				log.info("Voting for {} in {}", candidate, msgTerm)
+				candidate ! VoteCandidate(msgTerm)
+				stay() using m.withVote(msgTerm, candidate)
+			} else {
+				log.info("Rejecting RequestVote msg by {} in {}. Already voted for {}", candidate, msgTerm, m.currentTerm, m.votes.get(msgTerm))
+				sender ! DeclineCandidate(msgTerm)
+				stay() using m.withTerm(msgTerm)
+			}
 
     // end of election
 
