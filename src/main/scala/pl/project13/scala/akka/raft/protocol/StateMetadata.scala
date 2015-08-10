@@ -18,7 +18,7 @@ private[protocol] trait StateMetadata extends Serializable {
      * `ActorRef` that proxies this actor when in a clustered enviroment.
      */
     implicit def clusterSelf: ActorRef // todo rethink if needed, better yet rewrite ClusterRaftActor to be properly transparent for RaftActor if possible.
-    def votes: Map[Term, Candidate]
+    def votedFor: Option[Candidate]
     def currentTerm: Term
 
     def config: ClusterConfiguration
@@ -30,10 +30,10 @@ private[protocol] trait StateMetadata extends Serializable {
     def members = config.members
 
     /** A member can only vote once during one Term */
-    def canVoteIn(term: Term) = votes.get(term).isEmpty
+    def canVoteIn(term: Term) = votedFor.isEmpty
 
     /** A member can only vote once during one Term */
-    def cannotVoteIn(term: Term) = term < currentTerm || votes.get(term).isDefined
+    def cannotVoteIn(term: Term) = term < currentTerm || votedFor.isDefined
 
   }
 
@@ -41,26 +41,21 @@ private[protocol] trait StateMetadata extends Serializable {
     clusterSelf: ActorRef,
     currentTerm: Term,
     config: ClusterConfiguration,
-    votes: Map[Term, Candidate]
+    votedFor: Option[Candidate]
   ) extends Metadata {
 
     // transition helpers
-    def forNewElection: ElectionMeta = ElectionMeta(clusterSelf, currentTerm.next, 0, config, votes)
-
-    def withVote(term: Term, candidate: ActorRef) = {
-      if (term > currentTerm)
-        copy(currentTerm = term, votes = votes updated (term, candidate))
-      else
-        copy(votes = votes updated (term, candidate))
-    }
+    def forNewElection: ElectionMeta = ElectionMeta(clusterSelf, currentTerm.next, 0, config, votedFor)
 
     def withTerm(term: Term) = copy(currentTerm = term)
+
+    def withVoteFor(candidate: ActorRef) = copy(votedFor = Some(candidate))
 
     def withConfig(conf: ClusterConfiguration): Meta = copy(config = conf)
   }
 
   object Meta {
-    def initial(implicit self: ActorRef) = new Meta(self, Term(0), ClusterConfiguration(), Map.empty)
+    def initial(implicit self: ActorRef) = new Meta(self, Term(0), ClusterConfiguration(), None)
   }
 
   case class ElectionMeta(
@@ -68,19 +63,19 @@ private[protocol] trait StateMetadata extends Serializable {
     currentTerm: Term,
     votesReceived: Int,
     config: ClusterConfiguration,
-    votes: Map[Term, Candidate]
+    votedFor: Option[Candidate]
   ) extends Metadata {
 
     def hasMajority = votesReceived > config.members.size / 2
 
-    // transistion helpers
+    // transition helpers
     def incVote = copy(votesReceived = votesReceived + 1)
     def incTerm = copy(currentTerm = currentTerm.next)
 
-    def withVoteFor(term: Term, candidate: ActorRef) = copy(votes = votes + (term -> candidate))
+    def withVoteFor(candidate: ActorRef) = copy(votedFor = Some(candidate))
 
     def forLeader: LeaderMeta = LeaderMeta(clusterSelf, currentTerm, config)
-    def forFollower(term: Term = currentTerm): Meta = Meta(clusterSelf, term, config, Map.empty)
+    def forFollower(term: Term = currentTerm): Meta = Meta(clusterSelf, term, config, None)
     def forNewElection: ElectionMeta = this.forFollower().forNewElection
   }
 
@@ -90,12 +85,12 @@ private[protocol] trait StateMetadata extends Serializable {
     config: ClusterConfiguration
   ) extends Metadata {
 
-    val votes = Map.empty[Term, Candidate]
+    val votedFor = None
 
     // todo duplication; yeah, having 3 meta classes was a bad idea. todo make one Meta class
     def withConfig(conf: ClusterConfiguration): LeaderMeta = copy(config = conf)
 
-    def forFollower: Meta = Meta(clusterSelf, currentTerm, config, Map.empty)
+    def forFollower: Meta = Meta(clusterSelf, currentTerm, config, None)
   }
 
 }
