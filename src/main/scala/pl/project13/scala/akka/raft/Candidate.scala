@@ -28,8 +28,13 @@ private[raft] trait Candidate {
         val request = RequestVote(m.currentTerm, m.clusterSelf, replicatedLog.lastTerm, replicatedLog.lastIndex)
         m.membersExceptSelf foreach { _ ! request }
 
-        val includingThisVote = m.incVote
-        stay() using includingThisVote.withVoteFor(m.currentTerm, m.clusterSelf)
+        if (m.votes contains m.currentTerm) {
+          // We already voted for ourself this Term!
+          stay()
+        } else {
+          val includingThisVote = m.incVote
+          stay() using includingThisVote.withVoteFor(m.currentTerm, m.clusterSelf)
+        }
       }
 
     case Event(msg: RequestVote, m: ElectionMeta) if msg.term < m.currentTerm =>
