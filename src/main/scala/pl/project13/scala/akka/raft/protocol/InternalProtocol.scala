@@ -23,7 +23,7 @@ private[protocol] trait InternalProtocol extends Serializable {
     /** currentTerm for leader to update in the `nextTerm` lookup table */
     def term: Term
   }
-  case class AppendRejected(term: Term, lastIndex: Int)   extends AppendResponse
+  case class AppendRejected(term: Term)                   extends AppendResponse
   case class AppendSuccessful(term: Term, lastIndex: Int) extends AppendResponse
 
   /** Internal msg sent to actor which should start a snapshotting process */

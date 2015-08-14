@@ -34,22 +34,25 @@ private[protocol] trait RaftProtocol extends Serializable {
     entries: immutable.Seq[Entry[T]],
     leaderCommitId: Int
   ) extends RaftMessage {
-
-    def isHeartbeat = entries.isEmpty
-    def isNotHeartbeat = !isHeartbeat
-
-    override def toString = s"""AppendEntries(term:$term,prevLog:($prevLogTerm,$prevLogIndex),entries:$entries)"""
+    override def toString =
+    s"""AppendEntries(term:$term,prevLog:($prevLogTerm,$prevLogIndex),entries:$entries,leaderCommit:$leaderCommitId)"""
   }
 
   object AppendEntries {
-    def apply[T](term: Term, replicatedLog: ReplicatedLog[T], fromIndex: Int, leaderCommitId: Int): AppendEntries[T] = {
-      val entries = replicatedLog.entriesBatchFrom(fromIndex)
-
-      entries.headOption match {
-        case Some(head) => new AppendEntries[T](term, replicatedLog.termAt(head.prevIndex), head.prevIndex, entries, leaderCommitId)
-        case _          => new AppendEntries[T](term, Term(1), 1, entries, leaderCommitId)
+    // N.B. fromIndex and leaderCommitIdx should be 1-indexed
+    // Throws IllegalArgumentException if fromIndex > replicatedLog.length
+    def apply[T](term: Term, replicatedLog: ReplicatedLog[T], fromIndex: Int,leaderCommitIdx: Int): AppendEntries[T] = {
+      if (fromIndex > replicatedLog.nextIndex) {
+        throw new IllegalArgumentException(s"fromIndex ($fromIndex) > nextIndex (${replicatedLog.nextIndex})")
       }
 
+      val entries = replicatedLog.entriesBatchFrom(fromIndex)
+
+      val prevIndex = List(0, fromIndex - 1).max
+      val prevTerm = replicatedLog.termAt(prevIndex)
+
+      new AppendEntries[T](term, prevTerm, prevIndex, entries,
+        leaderCommitIdx)
     }
   }
 
