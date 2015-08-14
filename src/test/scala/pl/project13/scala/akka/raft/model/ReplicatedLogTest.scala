@@ -204,50 +204,6 @@ class ReplicatedLogTest extends FlatSpec with Matchers
     entriesFrom2ndTerm(2) should equal (Entry("c2", Term(2), 4))
   }
 
-  "verifyOrDrop" should "not change if entries match" in {
-    // given
-    var replicatedLog = ReplicatedLog.empty[String](1)
-    replicatedLog = replicatedLog.append(Entry("a", Term(1), 0))
-    replicatedLog = replicatedLog.append(Entry("b", Term(1), 1))
-    replicatedLog = replicatedLog.append(Entry("c", Term(2), 2))
-    replicatedLog = replicatedLog.append(Entry("d", Term(3), 3))
-
-    // when
-    val check0 = replicatedLog.putWithDroppingInconsistent(Entry("a", Term(1), 0))
-    val check1 = replicatedLog.putWithDroppingInconsistent(Entry("b", Term(1), 1))
-    val check2 = replicatedLog.putWithDroppingInconsistent(Entry("c", Term(2), 2))
-    val check3 = replicatedLog.putWithDroppingInconsistent(Entry("d", Term(3), 3))
-
-    // then
-    check0 should equal (replicatedLog)
-    check1 should equal (replicatedLog)
-    check2 should equal (replicatedLog)
-    check3 should equal (replicatedLog)
-  }
-
-  it should "drop elements after an index that does not match" in {
-    // given
-    var replicatedLog = ReplicatedLog.empty[String](1)
-    replicatedLog = replicatedLog.append(Entry("a", Term(1), 0))
-    replicatedLog = replicatedLog.append(Entry("b", Term(1), 1))
-    replicatedLog = replicatedLog.append(Entry("c", Term(2), 2))
-    replicatedLog = replicatedLog.append(Entry("d", Term(3), 3))
-
-    // when
-    val check0 = replicatedLog.putWithDroppingInconsistent(Entry("a", Term(1), 0))
-    val check1 = replicatedLog.putWithDroppingInconsistent(Entry("b", Term(1), 1))
-    val check2 = replicatedLog.putWithDroppingInconsistent(Entry("C!!!", Term(2), 1)) // different command
-
-    // then
-    check0 should equal (replicatedLog)
-    check1 should equal (replicatedLog)
-
-    check2 should not equal replicatedLog
-    check2.entries.head.command should equal ("a")
-    check2.entries.tail.head.command should equal ("C!!!")
-    check2.entries should have length 2
-  }
-
   "between" should "include 0th entry when asked between(-1, 0)" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String](1)

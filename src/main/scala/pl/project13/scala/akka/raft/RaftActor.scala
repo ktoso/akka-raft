@@ -35,9 +35,9 @@ abstract class RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
 
   var replicatedLog = ReplicatedLog.empty[Command](raftConfig.defaultAppendEntriesBatchSize)
 
-  var nextIndex = LogIndexMap.initialize(Set.empty, replicatedLog.lastIndex)
+  var nextIndex = LogIndexMap.initialize(Set.empty, replicatedLog.nextIndex)
 
-  var matchIndex = LogIndexMap.initialize(Set.empty, -1)
+  var matchIndex = LogIndexMap.initialize(Set.empty, 0)
 
   // end of raft member state --------------
 

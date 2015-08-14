@@ -61,14 +61,14 @@ private[raft] trait Leader {
 
     // append entries response handling
 
-    case Event(AppendRejected(term, index), m: LeaderMeta) if term > m.currentTerm =>
+    case Event(AppendRejected(term), m: LeaderMeta) if term > m.currentTerm =>
       stopHeartbeat()
       stepDown(m) // since there seems to be another leader!
 
-    case Event(msg: AppendRejected, m: LeaderMeta) =>
+    case Event(msg: AppendRejected, m: LeaderMeta) if msg.term == m.currentTerm =>
       registerAppendRejected(follower(), msg, m)
 
-    case Event(msg: AppendSuccessful, m: LeaderMeta) =>
+    case Event(msg: AppendSuccessful, m: LeaderMeta) if msg.term == m.currentTerm =>
       registerAppendSuccessful(follower(), msg, m)
 
     case Event(RequestConfiguration, m: LeaderMeta) =>
@@ -91,7 +91,7 @@ private[raft] trait Leader {
       m.currentTerm,
       replicatedLog,
       fromIndex = nextIndex.valueFor(follower),
-      leaderCommitId = replicatedLog.committedIndex
+      leaderCommitIdx = replicatedLog.committedIndex
     )
   }
 
@@ -119,17 +119,19 @@ private[raft] trait Leader {
         m.currentTerm,
         replicatedLog,
         fromIndex = nextIndex.valueFor(member),
-        leaderCommitId = replicatedLog.committedIndex
+        leaderCommitIdx = replicatedLog.committedIndex
       )
     }
   }
 
   def registerAppendRejected(member: ActorRef, msg: AppendRejected, m: LeaderMeta) = {
-    val AppendRejected(followerTerm, followerIndex) = msg
+    val AppendRejected(followerTerm) = msg
 
-    log.info("Follower {} rejected write: {} @ {}, back out the first index in this term and retry", follower(), followerTerm, followerIndex)
+    log.info("Follower {} rejected write: {}, back out the first index in this term and retry", follower(), followerTerm)
 
-    nextIndex.putIfSmaller(follower(), followerIndex)
+    if (nextIndex.valueFor(follower()) > 1) {
+      nextIndex.decrementFor(follower())
+    }
 
 //    todo think if we send here or keep in heartbeat
     sendEntries(follower(), m)
@@ -140,11 +142,12 @@ private[raft] trait Leader {
   def registerAppendSuccessful(member: ActorRef, msg: AppendSuccessful, m: LeaderMeta) = {
     val AppendSuccessful(followerTerm, followerIndex) = msg
 
-    log.info("Follower {} took write in term: {}, index: {}", follower(), followerTerm, nextIndex.valueFor(follower()))
+    log.info("Follower {} took write in term: {}, next index was: {}", follower(), followerTerm, nextIndex.valueFor(follower()))
 
     // update our tables for this member
-    nextIndex.put(follower(), followerIndex)
-    matchIndex.putIfGreater(follower(), nextIndex.valueFor(follower()))
+    assert(followerIndex <= replicatedLog.lastIndex)
+    nextIndex.put(follower(), followerIndex + 1)
+    matchIndex.putIfGreater(follower(), followerIndex)
 
     replicatedLog = maybeCommitEntry(m, matchIndex, replicatedLog)
 
@@ -155,10 +158,9 @@ private[raft] trait Leader {
     val indexOnMajority = matchIndex.consensusForIndex(m.config)
     val willCommit = indexOnMajority > replicatedLog.committedIndex
 
-    if (willCommit) log.info("Consensus for persisted index: {}. (Comitted index: {}, will commit now: {})", indexOnMajority, replicatedLog.committedIndex, willCommit)
-    else log.info("Consensus for persisted index: {}. (Comitted index: {})", indexOnMajority, replicatedLog.committedIndex)
-
     if (willCommit) {
+      log.info("Consensus for persisted index: {}. (Comitted index: {}, will commit now: {})", indexOnMajority, replicatedLog.committedIndex, willCommit)
+
       val entries = replicatedLog.between(replicatedLog.committedIndex, indexOnMajority)
 
       entries foreach { entry =>
