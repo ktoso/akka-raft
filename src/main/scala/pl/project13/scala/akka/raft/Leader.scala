@@ -61,7 +61,7 @@ private[raft] trait Leader {
 
     // append entries response handling
 
-    case Event(AppendRejected(term, index), m: LeaderMeta) if term > m.currentTerm =>
+    case Event(AppendRejected(term), m: LeaderMeta) if term > m.currentTerm =>
       stopHeartbeat()
       stepDown(m) // since there seems to be another leader!
 
@@ -78,6 +78,12 @@ private[raft] trait Leader {
     case Event(AskForState, _) =>
       sender() ! IAmInState(Leader)
       stay()
+  }
+
+  def initializeLeaderState(members: Set[ActorRef]) {
+    log.info("Preparing nextIndex and matchIndex table for followers, init all to: replicatedLog.lastIndex = {}", replicatedLog.lastIndex)
+    nextIndex = LogIndexMap.initialize(members, replicatedLog.lastIndex)
+    matchIndex = LogIndexMap.initialize(members, -1)
   }
 
   def sendEntries(follower: ActorRef, m: LeaderMeta) {

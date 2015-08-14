@@ -27,7 +27,7 @@ private[raft] trait Follower {
       stay() using m.withTerm(term)
 
     case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: Meta)
-      if m.canVoteIn(term, candidate) =>
+      if m.canVoteIn(term) =>
 
       resetElectionDeadline()
       // Check if the log is up-to-date before granting vote.
