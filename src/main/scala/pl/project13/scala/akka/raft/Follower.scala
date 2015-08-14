@@ -30,6 +30,7 @@ private[raft] trait Follower {
       if (m.canVoteIn(msgTerm)) {
         log.info("Voting for {} in {}", candidate, msgTerm)
         candidate ! VoteCandidate(msgTerm)
+        resetElectionDeadline()
         stay() using m.withVote(msgTerm, candidate)
       } else {
         log.info("Rejecting RequestVote msg by {} in {}. Already voted for {}", candidate, msgTerm, m.currentTerm, m.votes.get(msgTerm))
