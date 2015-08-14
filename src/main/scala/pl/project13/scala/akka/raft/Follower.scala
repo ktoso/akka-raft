@@ -27,7 +27,7 @@ private[raft] trait Follower {
 
     case Event(msg: RequestVote, m: Meta) if msg.term >= m.currentTerm =>
       val msgTerm = msg.term
-      if (m.canVoteIn(msgTerm)) {
+      if (m.canVoteIn(msgTerm, candidate)) {
         log.info("Voting for {} in {}", candidate, msgTerm)
         candidate ! VoteCandidate(msgTerm)
         stay() using m.withVote(msgTerm, candidate)

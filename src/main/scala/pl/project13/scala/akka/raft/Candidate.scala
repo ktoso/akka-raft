@@ -42,7 +42,7 @@ private[raft] trait Candidate {
       goto(Follower) using m.forFollower(msg.term)
 
     case Event(msg: RequestVote, m: ElectionMeta) =>
-      if (m.canVoteIn(msg.term)) {
+      if (m.canVoteIn(msg.term, msg.candidateId)) {
         log.info("Voting for {} in {}.", candidate, m.currentTerm)
         candidate ! VoteCandidate(m.currentTerm)
         stay() using m.withVoteFor(m.currentTerm, candidate)
