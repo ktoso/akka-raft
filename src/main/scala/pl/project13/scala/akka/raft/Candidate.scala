@@ -28,7 +28,7 @@ private[raft] trait Candidate {
         val request = RequestVote(m.currentTerm, m.clusterSelf, replicatedLog.lastTerm, replicatedLog.lastIndex)
         m.membersExceptSelf foreach { _ ! request }
 
-        val includingThisVote = m.incVote
+        val includingThisVote = m.incVote(self)
         stay() using includingThisVote.withVoteFor(m.currentTerm, m.clusterSelf)
       }
 
@@ -62,7 +62,7 @@ private[raft] trait Candidate {
       goto(Follower) using m.forFollower(term)
 
     case Event(VoteCandidate(term), m: ElectionMeta) =>
-      val includingThisVote = m.incVote
+      val includingThisVote = m.incVote(voter())
 
       if (includingThisVote.hasMajority) {
         log.info("Received vote by {}. Won election with {} of {} votes", voter(), includingThisVote.votesReceived, m.config.members.size)
