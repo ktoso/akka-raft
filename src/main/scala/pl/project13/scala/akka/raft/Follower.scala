@@ -52,11 +52,11 @@ private[raft] trait Follower {
         log.info("Voting for {} in {}", candidate, term)
         sender ! VoteCandidate(m.currentTerm)
 
-        stay() using m.withVote(term, candidate)
+        stay() using m.withVoteFor(candidate)
       }
 
     case Event(RequestVote(term, candidateId, lastLogTerm, lastLogIndex), m: Meta) =>
-      log.info("Rejecting vote for {}, and {}, currentTerm: {}, already voted for: {}", candidate(), term, m.currentTerm, m.votes.get(term))
+      log.info("Rejecting vote for {}, and {}, currentTerm: {}, already voted for: {}", candidate(), term, m.currentTerm, m.votedFor.get)
       sender ! DeclineCandidate(m.currentTerm)
       stay()
 
@@ -159,4 +159,5 @@ private[raft] trait Follower {
       // simply ignore applying cluster configurations onto the client state machine,
       // it's an internal thing and the client does not care about cluster config change.
   }
+  
 }

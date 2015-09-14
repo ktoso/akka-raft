@@ -29,7 +29,7 @@ private[raft] trait Candidate {
         m.membersExceptSelf foreach { _ ! request }
 
         val includingThisVote = m.incVote
-        stay() using includingThisVote.withVoteFor(m.currentTerm, m.clusterSelf)
+        stay() using includingThisVote.withVoteFor(m.clusterSelf)
       }
 
     case Event(msg: RequestVote, m: ElectionMeta) if msg.term < m.currentTerm =>
@@ -45,9 +45,9 @@ private[raft] trait Candidate {
       if (m.canVoteIn(msg.term)) {
         log.info("Voting for {} in {}.", candidate, m.currentTerm)
         candidate ! VoteCandidate(m.currentTerm)
-        stay() using m.withVoteFor(m.currentTerm, candidate)
+        stay() using m.withVoteFor(candidate)
       } else {
-        log.info("Rejecting RequestVote msg by {} in {}. Already voted for {}", candidate, m.currentTerm, m.votes.get(msg.term))
+        log.info("Rejecting RequestVote msg by {} in {}. Already voted for {}", candidate, m.currentTerm, m.votedFor.get)
         sender ! DeclineCandidate(m.currentTerm)
         stay()
       }
