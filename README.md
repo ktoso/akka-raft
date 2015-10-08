@@ -19,7 +19,9 @@ Disclaimer
 
 :boom: :boom:
 
-**This project is still work in progress (treat it as EARLY PREVIEW) and has not been stress tested (athough it is tested on multiple nodes already). Inconsistencies in the protocol implementation have been already discovered and will be worked on soon.** 
+**This project is a side-project of mine and is still work in progress (treat it as EARLY PREVIEW) and has a number of known protocol bugs (see [Issues](https://github.com/ktoso/akka-raft/issues)). It is NOT recommended to be used in production, however it's a great project to play around with implementing and discussing the Raft protocol.** 
+
+:boom: :boom:
 
 In other words: Use at own risk, best not on any production-like environments (for now).
 
@@ -125,6 +127,9 @@ Issues, Pull Requests as well as Tweets and Emails are more than welcome!
 
 Links & kudos
 -------------
+
+* An excellent analysis using *fuzz testing of akka-raft, discovering a number of protocol bugs by @colin-scott*, blog post [Fuzzing Raft for Fun and Publication](https://colin-scott.github.io/blog/2015/10/07/fuzzing-raft-for-fun-and-profit/) and linked inside it the whitepaper draft.
+
 
 * [Raft - In Search of an Understandable Consensus Algorithm](https://ramcloud.stanford.edu/wiki/download/attachments/11370504/raft.pdf) whitepaper
 * See other implementations (many lanugages) on [raftconsensus.github.io](http://raftconsensus.github.io)
