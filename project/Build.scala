@@ -36,13 +36,13 @@ object ApplicationBuild extends Build {
 }
 
 object Dependencies {
-    val akkaVersion = "2.3.8"
+    val akkaVersion = "2.4.0"
     val generalDependencies = Seq(
       "com.typesafe.akka" %% "akka-actor"     % akkaVersion,
       "com.typesafe.akka" %% "akka-slf4j"     % akkaVersion,
 
       "com.typesafe.akka" %% "akka-cluster"     % akkaVersion,
-      "com.typesafe.akka" %% "akka-persistence-experimental" % akkaVersion,
+      "com.typesafe.akka" %% "akka-persistence" % akkaVersion,
 
       "com.typesafe.akka" %% "akka-testkit"            % akkaVersion % "test",
       "com.typesafe.akka" %% "akka-multi-node-testkit" % akkaVersion % "test",
