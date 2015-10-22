@@ -4,7 +4,6 @@ import pl.project13.scala.akka.raft.protocol._
 import akka.testkit.{ImplicitSender, TestKit, TestProbe, TestFSMRef}
 import org.scalatest._
 import akka.actor.ActorSystem
-import pl.project13.scala.akka.raft.example.WordConcatRaftActor
 import pl.project13.scala.akka.raft.model.{Term, LogIndexMap}
 import pl.project13.scala.akka.raft.example.protocol._
 
@@ -48,7 +47,7 @@ class LeaderTest extends TestKit(ActorSystem("test-system")) with FlatSpecLike w
     val committedLog = actor.maybeCommitEntry(data, matchIndex, replicatedLog)
 
     // then
-    actor.replicatedLog.committedIndex should equal (-1)
+    actor.replicatedLog.committedIndex should equal (0)
     committedLog.committedIndex should equal (2)
   }
 
