@@ -55,8 +55,13 @@ private[raft] trait Follower {
         stay() using m.withVoteFor(candidate)
       }
 
-    case Event(RequestVote(term, candidateId, lastLogTerm, lastLogIndex), m: Meta) =>
+    case Event(RequestVote(term, candidateId, lastLogTerm, lastLogIndex), m: Meta) if m.votedFor.isDefined =>
       log.info("Rejecting vote for {}, and {}, currentTerm: {}, already voted for: {}", candidate(), term, m.currentTerm, m.votedFor.get)
+      sender ! DeclineCandidate(m.currentTerm)
+      stay()
+
+    case Event(RequestVote(term, candidateId, lastLogTerm, lastLogIndex), m: Meta) =>
+      log.info("Rejecting vote for {}, and {}, currentTerm: {}, received stale term number {}", candidate(), term, m.currentTerm, term)
       sender ! DeclineCandidate(m.currentTerm)
       stay()
 
