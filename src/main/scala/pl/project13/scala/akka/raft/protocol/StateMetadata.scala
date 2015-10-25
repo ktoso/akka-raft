@@ -30,7 +30,7 @@ private[protocol] trait StateMetadata extends Serializable {
     def members = config.members
 
     /** A member can only vote once during one Term */
-    def canVoteIn(term: Term) = votedFor.isEmpty
+    def canVoteIn(term: Term) = votedFor.isEmpty && term == currentTerm
 
     /** A member can only vote once during one Term */
     def cannotVoteIn(term: Term) = term < currentTerm || votedFor.isDefined

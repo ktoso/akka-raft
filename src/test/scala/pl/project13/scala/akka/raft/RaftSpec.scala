@@ -8,7 +8,6 @@ import akka.fsm.hack.TestFSMRefHack
 import pl.project13.scala.akka.raft.example.WordConcatRaftActor
 import org.scalatest.concurrent.Eventually
 import org.scalatest.time.{Millis, Seconds, Span}
-import scala.concurrent.duration.FiniteDuration
 
 /**
  * @param callingThreadDispatcher if true, will run using one thread. Use this for FSM tests, otherwise set to false to
@@ -102,13 +101,13 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true, _system: Option
     _members
 
   def followers() =
-    _members.filter(m => m.stateName == Follower && !m.isTerminated)
+    _members.filter(m => m.stateName == Follower)
 
   def follower(name: String) =
     _members.find(_.path.elements.last == name).get
 
   def candidates() =
-    _members.filter(m => m.stateName == Candidate && !m.isTerminated)
+    _members.filter(m => m.stateName == Candidate)
 
   def simpleName(ref: ActorRef) = {
     import collection.JavaConverters._

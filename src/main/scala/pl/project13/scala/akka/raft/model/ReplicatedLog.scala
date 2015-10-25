@@ -24,7 +24,7 @@ case class ReplicatedLog[Command](
 
   // log state
   def lastTerm  = entries.lastOption map { _.term } getOrElse Term(0)
-  def lastIndex = entries.lastOption map { _.index } getOrElse 0
+  def lastIndex = entries.lastOption map { _.index } getOrElse 1
 
   def prevIndex = (lastIndex: @switch) match {
     case 0 => 0 // special handling of initial case, we don't go into negative indexes
@@ -113,7 +113,7 @@ case class ReplicatedLog[Command](
 
 class EmptyReplicatedLog[T](defaultBatchSize: Int) extends ReplicatedLog[T](List.empty, 0, defaultBatchSize) {
   override def lastTerm = Term(0)
-  override def lastIndex = 0
+  override def lastIndex = 1
 }
 
 object ReplicatedLog {
