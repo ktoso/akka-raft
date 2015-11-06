@@ -41,13 +41,17 @@ private[protocol] trait StateMetadata extends Serializable {
     clusterSelf: ActorRef,
     currentTerm: Term,
     config: ClusterConfiguration,
-    votedFor: Option[Candidate]
+    votedFor: Option[Candidate] = None
   ) extends Metadata {
 
     // transition helpers
-    def forNewElection: ElectionMeta = ElectionMeta(clusterSelf, currentTerm.next, 0, config, votedFor)
+    def forNewElection: ElectionMeta = ElectionMeta(clusterSelf, currentTerm.next, 0, config, None)
 
-    def withTerm(term: Term) = copy(currentTerm = term)
+    def withTerm(term: Term) = {
+      if (term != currentTerm)
+        copy(currentTerm = term, votedFor = None)
+      else this
+    }
 
     def withVoteFor(candidate: ActorRef) = copy(votedFor = Some(candidate))
 
@@ -63,7 +67,7 @@ private[protocol] trait StateMetadata extends Serializable {
     currentTerm: Term,
     votesReceived: Int,
     config: ClusterConfiguration,
-    votedFor: Option[Candidate]
+    votedFor: Option[Candidate] = None
   ) extends Metadata {
 
     def hasMajority = votesReceived > config.members.size / 2
