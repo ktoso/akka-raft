@@ -51,7 +51,7 @@ private[protocol] trait RaftProtocol extends Serializable {
       val prevIndex = List(0, fromIndex - 1).max
       val prevTerm = replicatedLog.termAt(prevIndex)
 
-      new AppendEntries[T](term, prevTerm, prevIndex, entries,
+      new AppendEntries[T](term, prevTerm, fromIndex, entries,
         leaderCommitIdx)
     }
   }

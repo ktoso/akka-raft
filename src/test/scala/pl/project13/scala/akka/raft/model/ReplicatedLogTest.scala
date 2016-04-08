@@ -103,12 +103,12 @@ class ReplicatedLogTest extends FlatSpec with Matchers
   "isConsistentWith" should "be consistent for valid append within a term" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String](1)
-    replicatedLog = replicatedLog.append(Entry("a", Term(1), 0)) // t1, 0
-    replicatedLog = replicatedLog.append(Entry("b", Term(1), 1)) // t1, 1
+    replicatedLog = replicatedLog.append(Entry("a", Term(1), 1)) // t1, 0
+    replicatedLog = replicatedLog.append(Entry("b", Term(1), 2)) // t1, 1
 
     // when / then
-    replicatedLog.containsMatchingEntry(Term(1), 0) should equal (false)
-    replicatedLog.containsMatchingEntry(Term(1), 1) should equal (true)
+    replicatedLog.containsMatchingEntry(Term(1), 1) should equal (false)
+    replicatedLog.containsMatchingEntry(Term(1), 2) should equal (true)
   }
 
   it should "be consistent with itself, from 1 write in the past" in {
@@ -139,22 +139,22 @@ class ReplicatedLogTest extends FlatSpec with Matchers
   it should "be consistent with AppendEntries with multiple entries" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String](1)
-    replicatedLog = replicatedLog.append(Entry("a", Term(1), 0))
-    replicatedLog = replicatedLog.append(Entry("b", Term(1), 1))
-    replicatedLog = replicatedLog.append(Entry("b", Term(2), 2))
-    replicatedLog = replicatedLog.append(Entry("b", Term(3), 3))
+    replicatedLog = replicatedLog.append(Entry("a", Term(1), 1))
+    replicatedLog = replicatedLog.append(Entry("b", Term(1), 2))
+    replicatedLog = replicatedLog.append(Entry("b", Term(2), 3))
+    replicatedLog = replicatedLog.append(Entry("b", Term(3), 4))
 
     // when / then
-    replicatedLog.containsMatchingEntry(Term(1), 0) should equal (false)
     replicatedLog.containsMatchingEntry(Term(1), 1) should equal (false)
     replicatedLog.containsMatchingEntry(Term(1), 2) should equal (false)
-    replicatedLog.containsMatchingEntry(Term(2), 2) should equal (false)
+    replicatedLog.containsMatchingEntry(Term(1), 3) should equal (false)
     replicatedLog.containsMatchingEntry(Term(2), 3) should equal (false)
-    replicatedLog.containsMatchingEntry(Term(3), 2) should equal (false)
-    replicatedLog.containsMatchingEntry(Term(3), 3) should equal (true)
+    replicatedLog.containsMatchingEntry(Term(2), 4) should equal (false)
+    replicatedLog.containsMatchingEntry(Term(3), 3) should equal (false)
+    replicatedLog.containsMatchingEntry(Term(3), 4) should equal (true)
   }
 
-  "prevTerm / prevIndex" should "be Term(0) / 0 after first write" in {
+  "prevTerm / prevIndex" should "be Term(0) / 1 after first write" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String](1)
     replicatedLog = replicatedLog.append(Entry("a", Term(1), 1))
@@ -165,7 +165,7 @@ class ReplicatedLogTest extends FlatSpec with Matchers
 
     // then
     prevTerm should equal (Term(0))
-    prevIndex should equal (0)
+    prevIndex should equal (1)
   }
 
   "entriesFrom" should "not include already sent entry, from given term" in {
