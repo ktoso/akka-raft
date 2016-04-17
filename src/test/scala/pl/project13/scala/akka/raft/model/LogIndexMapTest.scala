@@ -86,8 +86,8 @@ class LogIndexMapTest extends RaftSpec with BeforeAndAfter {
     matchIndex.put(probe3.ref, 5)
     matchIndex.put(probe4.ref, 3)
     matchIndex.put(probe5.ref, 2)
-    // chaotic case, lowest must win
-    matchIndex.consensusForIndex(jointConsensusConfig) should equal (2)
+    // chaotic case
+    matchIndex.consensusForIndex(jointConsensusConfig) should equal (3)
   }
 
 }

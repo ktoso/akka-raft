@@ -7,7 +7,7 @@ import pl.project13.scala.akka.raft.model.RaftSnapshot
 
 /**
  * Simplest possible log compaction.
- * We do not store snapshots anywhere externaly, just apply the compaction to the replicated log.
+ * We do not store snapshots anywhere externally, just apply the compaction to the replicated log.
  */
 class DefaultLogCompactionSupport(system: ActorSystem) extends LogCompactionSupport with Extension {
 
