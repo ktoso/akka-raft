@@ -8,7 +8,7 @@ import pl.project13.scala.akka.raft.{StableClusterConfiguration, JointConsensusC
 /**
  * '''Mutable''' "member -> number" mapper.
 
- * Implements convinience methods for maintaining the volatile state on leaders:
+ * Implements convenience methods for maintaining the volatile state on leaders:
  * See: nextIndex[] and matchIndex[] in the Raft paper.
  *
  */

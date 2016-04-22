@@ -23,8 +23,8 @@ class ReplicatedLogTest extends FlatSpec with Matchers
 
     // when
     val frozenLog = replicatedLog
-    replicatedLog += Entry(command1, t1, 0)
-    replicatedLog += Entry(command2, t2, 1)
+    replicatedLog += Entry(command1, t1, 1)
+    replicatedLog += Entry(command2, t2, 2)
 
     // then
     frozenLog.entries should have length 0 // check for immutability
@@ -36,8 +36,8 @@ class ReplicatedLogTest extends FlatSpec with Matchers
     var replicatedLog = ReplicatedLog.empty[String](1)
 
     // when
-    replicatedLog += Entry("a", Term(1), 0)
-    replicatedLog += Entry("b", Term(1), 1)
+    replicatedLog += Entry("a", Term(1), 1)
+    replicatedLog += Entry("b", Term(1), 2)
 
     // then
     val commands = replicatedLog.entries.map(_.command).toList
@@ -47,9 +47,9 @@ class ReplicatedLogTest extends FlatSpec with Matchers
   it should "append with slicing some elements away (Leader forces us to drop some entries)" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String](1)
-    replicatedLog += Entry("a", Term(1), 0)
-    replicatedLog += Entry("D", Term(1), 1)
+    replicatedLog += Entry("a", Term(1), 1)
     replicatedLog += Entry("D", Term(1), 2)
+    replicatedLog += Entry("D", Term(1), 3)
 
     val entries =
       Entry("b", Term(1), 1) ::
@@ -66,23 +66,23 @@ class ReplicatedLogTest extends FlatSpec with Matchers
   it should "append properly" in {
     // given
     var replicatedLog = ReplicatedLog.empty[Cmnd](1)
-    replicatedLog += Entry(AppendWord("I"), Term(1), 0)
-    replicatedLog += Entry(AppendWord("like"), Term(1), 1)
-    replicatedLog += Entry(AppendWord("bananas"), Term(1), 2)
-    replicatedLog += Entry(GetWords, Term(1), 3)
+    replicatedLog += Entry(AppendWord("I"), Term(1), 1)
+    replicatedLog += Entry(AppendWord("like"), Term(1), 2)
+    replicatedLog += Entry(AppendWord("bananas"), Term(1), 3)
+    replicatedLog += Entry(GetWords, Term(1), 4)
 
     // when
 
     // then
   }
 
-  "comittedEntries" should "contain entries up until the last committed one" in {
+  "committedEntries" should "contain entries up until the last committed one" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String](1)
     replicatedLog = ReplicatedLog.empty[String](1)
-    replicatedLog = replicatedLog.append(Entry("a", Term(1), 0))
-    replicatedLog = replicatedLog.append(Entry("b", Term(2), 1))
-    replicatedLog = replicatedLog.append(Entry("a", Term(3), 2))
+    replicatedLog = replicatedLog.append(Entry("a", Term(1), 1))
+    replicatedLog = replicatedLog.append(Entry("b", Term(2), 2))
+    replicatedLog = replicatedLog.append(Entry("a", Term(3), 3))
 
     // when
     val comittedIndex = 2
@@ -92,30 +92,30 @@ class ReplicatedLogTest extends FlatSpec with Matchers
     replicatedLog.lastIndex should equal (comittedLog.lastIndex)
     replicatedLog.lastTerm should equal (comittedLog.lastTerm)
 
-    replicatedLog.committedIndex should equal (-1) // nothing ever comitted
+    replicatedLog.committedIndex should equal (0) // nothing ever committed
     comittedLog.committedIndex should equal (comittedIndex)
 
     comittedLog.committedEntries should have length (2)
-    comittedLog.committedEntries.head should equal (Entry("a", Term(1), 0, None))
-    comittedLog.committedEntries.tail.head should equal (Entry("b", Term(2), 1, None))
+    comittedLog.committedEntries.head should equal (Entry("a", Term(1), 1, None))
+    comittedLog.committedEntries.tail.head should equal (Entry("b", Term(2), 2, None))
   }
 
   "isConsistentWith" should "be consistent for valid append within a term" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String](1)
-    replicatedLog = replicatedLog.append(Entry("a", Term(1), 0)) // t1, 0
-    replicatedLog = replicatedLog.append(Entry("b", Term(1), 1)) // t1, 1
+    replicatedLog = replicatedLog.append(Entry("a", Term(1), 1)) // t1, 0
+    replicatedLog = replicatedLog.append(Entry("b", Term(1), 2)) // t1, 1
 
     // when / then
-    replicatedLog.containsMatchingEntry(Term(1), 0) should equal (false)
-    replicatedLog.containsMatchingEntry(Term(1), 1) should equal (true)
+    replicatedLog.containsMatchingEntry(Term(1), 1) should equal (false)
+    replicatedLog.containsMatchingEntry(Term(1), 2) should equal (true)
   }
 
   it should "be consistent with itself, from 1 write in the past" in {
     // given
     val emptyLog = ReplicatedLog.empty[String](1)
     var replicatedLog = ReplicatedLog.empty[String](1)
-    replicatedLog += Entry("a", Term(1), 0)
+    replicatedLog += Entry("a", Term(1), 1)
 
     // when
     info(s"empty log: ${emptyLog}")
@@ -129,35 +129,35 @@ class ReplicatedLogTest extends FlatSpec with Matchers
   it should "be consistent for initial append" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String](1)
-    replicatedLog = replicatedLog.append(Entry("I", Term(1), 0))
+    replicatedLog = replicatedLog.append(Entry("I", Term(1), 1))
     info("replicated log = " + replicatedLog)
 
     // when / then
-    replicatedLog.containsMatchingEntry(Term(0), 0) should equal (true)
+    replicatedLog.containsMatchingEntry(Term(0), 1) should equal (true)
   }
 
   it should "be consistent with AppendEntries with multiple entries" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String](1)
-    replicatedLog = replicatedLog.append(Entry("a", Term(1), 0))
-    replicatedLog = replicatedLog.append(Entry("b", Term(1), 1))
-    replicatedLog = replicatedLog.append(Entry("b", Term(2), 2))
-    replicatedLog = replicatedLog.append(Entry("b", Term(3), 3))
+    replicatedLog = replicatedLog.append(Entry("a", Term(1), 1))
+    replicatedLog = replicatedLog.append(Entry("b", Term(1), 2))
+    replicatedLog = replicatedLog.append(Entry("b", Term(2), 3))
+    replicatedLog = replicatedLog.append(Entry("b", Term(3), 4))
 
     // when / then
-    replicatedLog.containsMatchingEntry(Term(1), 0) should equal (false)
     replicatedLog.containsMatchingEntry(Term(1), 1) should equal (false)
     replicatedLog.containsMatchingEntry(Term(1), 2) should equal (false)
-    replicatedLog.containsMatchingEntry(Term(2), 2) should equal (false)
+    replicatedLog.containsMatchingEntry(Term(1), 3) should equal (false)
     replicatedLog.containsMatchingEntry(Term(2), 3) should equal (false)
-    replicatedLog.containsMatchingEntry(Term(3), 2) should equal (false)
-    replicatedLog.containsMatchingEntry(Term(3), 3) should equal (true)
+    replicatedLog.containsMatchingEntry(Term(2), 4) should equal (false)
+    replicatedLog.containsMatchingEntry(Term(3), 3) should equal (false)
+    replicatedLog.containsMatchingEntry(Term(3), 4) should equal (true)
   }
 
-  "prevTerm / prevIndex" should "be Term(0) / 0 after first write" in {
+  "prevTerm / prevIndex" should "be Term(0) / 1 after first write" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String](1)
-    replicatedLog = replicatedLog.append(Entry("a", Term(1), 0))
+    replicatedLog = replicatedLog.append(Entry("a", Term(1), 1))
 
     // when
     val prevTerm = replicatedLog.prevTerm
@@ -165,53 +165,53 @@ class ReplicatedLogTest extends FlatSpec with Matchers
 
     // then
     prevTerm should equal (Term(0))
-    prevIndex should equal (0)
+    prevIndex should equal (1)
   }
 
   "entriesFrom" should "not include already sent entry, from given term" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String](1)
-    replicatedLog = replicatedLog.append(Entry("a", Term(1), 0))
-    replicatedLog = replicatedLog.append(Entry("b", Term(1), 1))
-    replicatedLog = replicatedLog.append(Entry("c", Term(2), 2))
-    replicatedLog = replicatedLog.append(Entry("d", Term(3), 3)) // other term
+    replicatedLog = replicatedLog.append(Entry("a", Term(1), 1))
+    replicatedLog = replicatedLog.append(Entry("b", Term(1), 2))
+    replicatedLog = replicatedLog.append(Entry("c", Term(2), 3))
+    replicatedLog = replicatedLog.append(Entry("d", Term(3), 4)) // other term
 
     // when
-    val inTerm1 = replicatedLog.entriesBatchFrom(1)
+    val inTerm1 = replicatedLog.entriesBatchFrom(2)
 
     // then
     inTerm1 should have length 1
-    inTerm1(0) should equal (Entry("b", Term(1), 1))
+    inTerm1(0) should equal (Entry("b", Term(1), 2))
   }
 
   it should "not include already sent entries, from given term" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String](1)
-    replicatedLog = replicatedLog.append(Entry("a", Term(1), 0))
-    replicatedLog = replicatedLog.append(Entry("b", Term(1), 1))
-    replicatedLog = replicatedLog.append(Entry("c0", Term(2), 2))
-    replicatedLog = replicatedLog.append(Entry("c1", Term(2), 3))
-    replicatedLog = replicatedLog.append(Entry("c2", Term(2), 4))
-    replicatedLog = replicatedLog.append(Entry("d", Term(3), 5)) // other term
+    replicatedLog = replicatedLog.append(Entry("a", Term(1), 1))
+    replicatedLog = replicatedLog.append(Entry("b", Term(1), 2))
+    replicatedLog = replicatedLog.append(Entry("c0", Term(2), 3))
+    replicatedLog = replicatedLog.append(Entry("c1", Term(2), 4))
+    replicatedLog = replicatedLog.append(Entry("c2", Term(2), 5))
+    replicatedLog = replicatedLog.append(Entry("d", Term(3), 6)) // other term
 
     // when
-    val entriesFrom2ndTerm = replicatedLog.entriesBatchFrom(2)
+    val entriesFrom2ndTerm = replicatedLog.entriesBatchFrom(3)
 
     // then
     entriesFrom2ndTerm should have length 3
-    entriesFrom2ndTerm(0) should equal (Entry("c0", Term(2), 2))
-    entriesFrom2ndTerm(1) should equal (Entry("c1", Term(2), 3))
-    entriesFrom2ndTerm(2) should equal (Entry("c2", Term(2), 4))
+    entriesFrom2ndTerm(0) should equal (Entry("c0", Term(2), 3))
+    entriesFrom2ndTerm(1) should equal (Entry("c1", Term(2), 4))
+    entriesFrom2ndTerm(2) should equal (Entry("c2", Term(2), 5))
   }
 
   "between" should "include 0th entry when asked between(-1, 0)" in {
     // given
     var replicatedLog = ReplicatedLog.empty[String](1)
-    val firstEntry = Entry("a", Term(1), 0)
+    val firstEntry = Entry("a", Term(1), 1)
     replicatedLog += firstEntry
 
     // when
-    val initialEntry = replicatedLog.between(-1, 0)
+    val initialEntry = replicatedLog.between(0, 1)
 
     // then
     initialEntry.headOption should be ('defined)

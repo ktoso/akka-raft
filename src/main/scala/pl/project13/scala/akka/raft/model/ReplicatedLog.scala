@@ -19,15 +19,15 @@ case class ReplicatedLog[Command](
    * Performs the "consistency check", which checks if the data that we just got from the
    */
   def containsMatchingEntry(otherPrevTerm: Term, otherPrevIndex: Int): Boolean =
-    (otherPrevTerm == Term(0) && otherPrevIndex == 0) ||
-    (entries.isDefinedAt(otherPrevIndex - 1) && entries(otherPrevIndex - 1).term == otherPrevTerm)
+    (otherPrevTerm == Term(0) && otherPrevIndex == 1) ||
+    (entries.isDefinedAt(otherPrevIndex - 1) && entries(otherPrevIndex - 1).term == otherPrevTerm && lastIndex == otherPrevIndex)
 
   // log state
   def lastTerm  = entries.lastOption map { _.term } getOrElse Term(0)
   def lastIndex = entries.lastOption map { _.index } getOrElse 1
 
   def prevIndex = (lastIndex: @switch) match {
-    case 0 => 0 // special handling of initial case, we don't go into negative indexes
+    case 1 => 1 // special handling of initial case, we don't go into negative indexes
     case n => n - 1
   }
   def prevTerm  = if (entries.size < 2) Term(0) else entries.dropRight(1).last.term
