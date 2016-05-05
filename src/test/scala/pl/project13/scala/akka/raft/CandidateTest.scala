@@ -6,7 +6,6 @@ import org.scalatest.BeforeAndAfterEach
 import org.scalatest.concurrent.Eventually
 import scala.concurrent.duration._
 import org.scalatest.time.{Millis, Span}
-import pl.project13.scala.akka.raft.example.WordConcatRaftActor
 import pl.project13.scala.akka.raft.model.{Entry, Term}
 import pl.project13.scala.akka.raft.example.protocol._
 
@@ -18,7 +17,7 @@ class CandidateTest extends RaftSpec with BeforeAndAfterEach
 
   val candidate = TestFSMRef(new SnapshottingWordConcatRaftActor with EventStreamAllMessages)
 
-  var data: ElectionMeta = _
+  var data: Meta = _
   
   val initialMembers = 0
 

@@ -1,6 +1,6 @@
 package pl.project13.scala.akka.raft
 
-import akka.actor.{Actor, ActorRef, LoggingFSM}
+import akka.actor.{Actor, LoggingFSM}
 import scala.concurrent.duration._
 
 import model._
@@ -126,8 +126,8 @@ abstract class RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
   }
 
   /** Stop being the Leader */
-  def stepDown(m: LeaderMeta) = {
-    goto(Follower) using m.forFollower
+  def stepDown(m: Meta) = {
+    goto(Follower) using m.forFollower()
   }
 
   /** Stay in current state and reset the election timeout */

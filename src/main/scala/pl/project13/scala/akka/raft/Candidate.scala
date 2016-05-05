@@ -12,13 +12,13 @@ private[raft] trait Candidate {
 
   val candidateBehavior: StateFunction = {
     // message from client, tell it that we know of no leader
-    case Event(msg: ClientMessage[Command], m: ElectionMeta) =>
+    case Event(msg: ClientMessage[Command], m: Meta) =>
       log.info("Candidate got {} from client; Respond with anarchy - there is no leader.", msg)
       sender() ! LeaderIs(None, Some(msg))
       stay()
 
     // election
-    case Event(BeginElection, m: ElectionMeta) =>
+    case Event(BeginElection, m: Meta) =>
       if (m.config.members.isEmpty) {
         log.warning("Tried to initialize election with no members...")
         goto(Follower) using m.forFollower()
@@ -32,16 +32,16 @@ private[raft] trait Candidate {
         stay() using includingThisVote.withVoteFor(m.clusterSelf)
       }
 
-    case Event(msg: RequestVote, m: ElectionMeta) if msg.term < m.currentTerm =>
+    case Event(msg: RequestVote, m: Meta) if msg.term < m.currentTerm =>
       log.info("Rejecting RequestVote msg by {} in {}. Received stale {}.", candidate, m.currentTerm, msg.term)
       candidate ! DeclineCandidate(m.currentTerm)
       stay()
 
-    case Event(msg: RequestVote, m: ElectionMeta) if msg.term > m.currentTerm =>
+    case Event(msg: RequestVote, m: Meta) if msg.term > m.currentTerm =>
       log.info("Received newer {}. Current term is {}. Revert to follower state.", msg.term, m.currentTerm)
       goto(Follower) using m.forFollower(msg.term)
 
-    case Event(msg: RequestVote, m: ElectionMeta) =>
+    case Event(msg: RequestVote, m: Meta) =>
       if (m.canVoteIn(msg.term)) {
         log.info("Voting for {} in {}.", candidate, m.currentTerm)
         candidate ! VoteCandidate(m.currentTerm)
@@ -52,16 +52,16 @@ private[raft] trait Candidate {
         stay()
       }
 
-    case Event(VoteCandidate(term), m: ElectionMeta) if term < m.currentTerm =>
+    case Event(VoteCandidate(term), m: Meta) if term < m.currentTerm =>
       log.info("Rejecting VoteCandidate msg by {} in {}. Received stale {}.", voter(), m.currentTerm, term)
       voter ! DeclineCandidate(m.currentTerm)
       stay()
 
-    case Event(VoteCandidate(term), m: ElectionMeta) if term > m.currentTerm =>
+    case Event(VoteCandidate(term), m: Meta) if term > m.currentTerm =>
       log.info("Received newer {}. Current term is {}. Revert to follower state.", term, m.currentTerm)
       goto(Follower) using m.forFollower(term)
 
-    case Event(VoteCandidate(term), m: ElectionMeta) =>
+    case Event(VoteCandidate(term), m: Meta) =>
       val includingThisVote = m.incVote
 
       if (includingThisVote.hasMajority) {
@@ -72,7 +72,7 @@ private[raft] trait Candidate {
         stay() using includingThisVote
       }
 
-    case Event(DeclineCandidate(term), m: ElectionMeta) =>
+    case Event(DeclineCandidate(term), m: Meta) =>
       if (term > m.currentTerm) {
         log.info("Received newer {}. Current term is {}. Revert to follower state.", term, m.currentTerm)
         goto(Follower) using m.forFollower(term)
@@ -85,7 +85,7 @@ private[raft] trait Candidate {
     // end of election
 
     // handle appends
-    case Event(append: AppendEntries[Entry[Command]], m: ElectionMeta) =>
+    case Event(append: AppendEntries[Entry[Command]], m: Meta) =>
       val leaderIsAhead = append.term >= m.currentTerm
 
       if (leaderIsAhead) {
@@ -97,13 +97,13 @@ private[raft] trait Candidate {
       }
 
     // ending election due to timeout
-    case Event(ElectionTimeout, m: ElectionMeta) if m.config.members.size > 1 =>
+    case Event(ElectionTimeout, m: Meta) if m.config.members.size > 1 =>
       log.info("Voting timeout, starting a new election (among {})...", m.config.members.size)
       m.clusterSelf ! BeginElection
       stay() using m.forNewElection
 
     // would like to start election, but I'm all alone! ;-(
-    case Event(ElectionTimeout, m: ElectionMeta) =>
+    case Event(ElectionTimeout, m: Meta) =>
       log.info("Voting timeout, unable to start election, don't know enough nodes (members: {})...", m.config.members.size)
       goto(Follower) using m.forFollower()
 

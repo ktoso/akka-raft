@@ -14,13 +14,13 @@ private[raft] trait Leader {
   private val HeartbeatTimerName = "heartbeat-timer"
 
   val leaderBehavior: StateFunction = {
-    case Event(ElectedAsLeader, m: LeaderMeta) =>
+    case Event(ElectedAsLeader, m: Meta) =>
       log.info("Became leader for {}", m.currentTerm)
       initializeLeaderState(m.config.members)
       startHeartbeat(m)
       stay()
 
-    case Event(SendHeartbeat, m: LeaderMeta) =>
+    case Event(SendHeartbeat, m: Meta) =>
       sendHeartbeat(m)
       stay()
 
@@ -29,7 +29,7 @@ private[raft] trait Leader {
       stay()
 
     // client request
-    case Event(ClientMessage(client, cmd: Command), m: LeaderMeta) =>
+    case Event(ClientMessage(client, cmd: Command), m: Meta) =>
       log.info("Appending command: [{}] from {} to replicated log...", cmd, client)
 
       val entry = Entry(cmd, m.currentTerm, replicatedLog.nextIndex, Some(client))
@@ -45,15 +45,15 @@ private[raft] trait Leader {
       if (meta.config.isPartOfNewConfiguration(m.clusterSelf))
         stay() using meta
       else
-        goto(Follower) using meta.forFollower // or maybe goto something else?
+        goto(Follower) using meta.forFollower() // or maybe goto something else?
 
     // rogue Leader handling
-    case Event(append: AppendEntries[Command], m: LeaderMeta) if append.term > m.currentTerm =>
+    case Event(append: AppendEntries[Command], m: Meta) if append.term > m.currentTerm =>
       log.info("Leader (@ {}) got AppendEntries from fresher Leader (@ {}), will step down and the Leader will keep being: {}", m.currentTerm, append.term, sender())
       stopHeartbeat()
       stepDown(m)
 
-    case Event(append: AppendEntries[Command], m: LeaderMeta) if append.term <= m.currentTerm =>
+    case Event(append: AppendEntries[Command], m: Meta) if append.term <= m.currentTerm =>
       log.warning("Leader (@ {}) got AppendEntries from rogue Leader ({} @ {}); It's not fresher than self. Will send entries, to force it to step down.", m.currentTerm, sender(), append.term)
       sendEntries(sender(), m)
       stay()
@@ -61,17 +61,17 @@ private[raft] trait Leader {
 
     // append entries response handling
 
-    case Event(AppendRejected(term), m: LeaderMeta) if term > m.currentTerm =>
+    case Event(AppendRejected(term), m: Meta) if term > m.currentTerm =>
       stopHeartbeat()
       stepDown(m) // since there seems to be another leader!
 
-    case Event(msg: AppendRejected, m: LeaderMeta) if msg.term == m.currentTerm =>
+    case Event(msg: AppendRejected, m: Meta) if msg.term == m.currentTerm =>
       registerAppendRejected(follower(), msg, m)
 
-    case Event(msg: AppendSuccessful, m: LeaderMeta) if msg.term == m.currentTerm =>
+    case Event(msg: AppendSuccessful, m: Meta) if msg.term == m.currentTerm =>
       registerAppendSuccessful(follower(), msg, m)
 
-    case Event(RequestConfiguration, m: LeaderMeta) =>
+    case Event(RequestConfiguration, m: Meta) =>
       sender() ! ChangeConfiguration(m.config)
       stay()
 
@@ -86,7 +86,7 @@ private[raft] trait Leader {
     matchIndex = LogIndexMap.initialize(members, -1)
   }
 
-  def sendEntries(follower: ActorRef, m: LeaderMeta) {
+  def sendEntries(follower: ActorRef, m: Meta) {
     follower ! AppendEntries(
       m.currentTerm,
       replicatedLog,
@@ -99,18 +99,18 @@ private[raft] trait Leader {
     cancelTimer(HeartbeatTimerName)
   }
 
-  def startHeartbeat(m: LeaderMeta) {
+  def startHeartbeat(m: Meta) {
     sendHeartbeat(m)
     log.info("Starting hearbeat, with interval: {}", heartbeatInterval)
     setTimer(HeartbeatTimerName, SendHeartbeat, heartbeatInterval, repeat = true)
   }
 
   /** heartbeat is implemented as basically sending AppendEntry messages */
-  def sendHeartbeat(m: LeaderMeta) {
+  def sendHeartbeat(m: Meta) {
     replicateLog(m)
   }
 
-  def replicateLog(m: LeaderMeta) {
+  def replicateLog(m: Meta) {
     m.membersExceptSelf foreach { member =>
       // todo remove me
 //      log.info("sending: {} to {}", AppendEntries(m.currentTerm, replicatedLog, fromIndex = nextIndex.valueFor(member), leaderCommitId = replicatedLog.committedIndex), member)
@@ -124,7 +124,7 @@ private[raft] trait Leader {
     }
   }
 
-  def registerAppendRejected(member: ActorRef, msg: AppendRejected, m: LeaderMeta) = {
+  def registerAppendRejected(member: ActorRef, msg: AppendRejected, m: Meta) = {
     val AppendRejected(followerTerm) = msg
 
     log.info("Follower {} rejected write: {}, back out the first index in this term and retry", follower(), followerTerm)
@@ -139,7 +139,7 @@ private[raft] trait Leader {
     stay()
   }
 
-  def registerAppendSuccessful(member: ActorRef, msg: AppendSuccessful, m: LeaderMeta) = {
+  def registerAppendSuccessful(member: ActorRef, msg: AppendSuccessful, m: Meta) = {
     val AppendSuccessful(followerTerm, followerIndex) = msg
 
     log.info("Follower {} took write in term: {}, next index was: {}", follower(), followerTerm, nextIndex.valueFor(follower()))
@@ -154,7 +154,7 @@ private[raft] trait Leader {
     stay()
   }
 
-  def maybeCommitEntry(m: LeaderMeta, matchIndex: LogIndexMap, replicatedLog: ReplicatedLog[Command]): ReplicatedLog[Command] = {
+  def maybeCommitEntry(m: Meta, matchIndex: LogIndexMap, replicatedLog: ReplicatedLog[Command]): ReplicatedLog[Command] = {
     val indexOnMajority = matchIndex.consensusForIndex(m.config)
     val willCommit = indexOnMajority > replicatedLog.committedIndex
 
@@ -201,7 +201,7 @@ private[raft] trait Leader {
    * Configurations must be used by each node right away when they get appended to their logs (doesn't matter if not committed).
    * This method updates the Meta object if a configuration change is discovered.
    */
-  def maybeUpdateConfiguration(meta: LeaderMeta, entry: Command): LeaderMeta = entry match {
+  def maybeUpdateConfiguration(meta: Meta, entry: Command): Meta = entry match {
     case newConfig: ClusterConfiguration if newConfig.isNewerThan(meta.config) =>
       log.info("Appended new configuration, will start using it now: {}", newConfig)
       meta.withConfig(newConfig)
