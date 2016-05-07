@@ -17,7 +17,7 @@ trait SharedBehaviors {
 
     case Event(AssignClusterSelf(clusterSelf), m: Meta) =>
       log.info("Registered proxy actor, will expose clusterSelf as: {}", clusterSelf)
-      stay() using m.copy(clusterSelf = clusterSelf)
+      stay() applying WithNewClusterSelf(clusterSelf)
 
 
     case Event(ChangeConfiguration(initialConfig), m: Meta) =>
@@ -27,7 +27,7 @@ trait SharedBehaviors {
 
       val deadline = resetElectionDeadline()
       log.info("Finished init of new Raft member, becoming Follower. Initial election deadline: {}", deadline)
-      goto(Follower) using m.copy(config = initialConfig)
+      goto(Follower) applying WithNewConfigEvent(config = initialConfig)
 
 
     case Event(msg: AppendEntries[Command], m: Meta) =>
@@ -44,11 +44,11 @@ trait SharedBehaviors {
       
       if (added.keepInitUntil <= newMembers.size) {
         log.info("Discovered the required min. of {} raft cluster members, becoming Follower.", added.keepInitUntil)
-        goto(Follower) using m.copy(config = initialConfig)
+        goto(Follower) applying WithNewConfigEvent(config = initialConfig)
       } else {
         // keep waiting for others to be discovered
         log.info("Up to {} discovered raft cluster members, still waiting in Init until {} discovered.", newMembers.size, added.keepInitUntil)
-        stay() using m.copy(config = initialConfig)
+        stay() applying WithNewConfigEvent(config = initialConfig)
       }
 
     case Event(removed: RaftMemberRemoved, m: Meta) =>
@@ -58,7 +58,7 @@ trait SharedBehaviors {
       
       // keep waiting for others to be discovered
       log.debug("Removed one member, until now discovered {} raft cluster members, still waiting in Init until {} discovered.", newMembers.size, removed.keepInitUntil)
-      stay() using m.copy(config = waitingConfig)
+      stay() applying WithNewConfigEvent(config = waitingConfig)
   }
 
   /** Handles adding / removing raft members; Should be handled in every state */

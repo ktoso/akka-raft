@@ -43,9 +43,9 @@ private[raft] trait Leader {
       replicateLog(meta)
 
       if (meta.config.isPartOfNewConfiguration(m.clusterSelf))
-        stay() using meta
+        stay() applying KeepStateEvent()
       else
-        goto(Follower) using meta.forFollower() // or maybe goto something else?
+        goto(Follower) applying GoToFollowerEvent()
 
     // rogue Leader handling
     case Event(append: AppendEntries[Command], m: Meta) if append.term > m.currentTerm =>

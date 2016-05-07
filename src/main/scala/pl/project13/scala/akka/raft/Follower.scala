@@ -24,7 +24,7 @@ private[raft] trait Follower {
       log.info("Received newer {}. Current term is {}.", term, m.currentTerm)
       // Let the next case clause deal with it, after we've updated our Term
       m.clusterSelf forward r
-      stay() using m.withTerm(term)
+      stay() applying UpdateTermEvent(term)
 
     case Event(RequestVote(term, candidate, lastLogTerm, lastLogIndex), m: Meta)
       if m.canVoteIn(term) =>
@@ -52,7 +52,7 @@ private[raft] trait Follower {
         log.info("Voting for {} in {}", candidate, term)
         sender ! VoteCandidate(m.currentTerm)
 
-        stay() using m.withVoteFor(candidate)
+        stay() applying VoteForEvent(candidate)
       }
 
     case Event(RequestVote(term, candidateId, lastLogTerm, lastLogIndex), m: Meta) if m.votedFor.isDefined =>
@@ -106,9 +106,8 @@ private[raft] trait Follower {
     leader ! append(msg.entries, m)
     replicatedLog = commitUntilLeadersIndex(m, msg)
 
-    val meta = maybeUpdateConfiguration(m, msg.entries.map(_.command))
-    val metaWithUpdatedTerm = meta.copy(currentTerm = replicatedLog.lastTerm)
-    acceptHeartbeat() using metaWithUpdatedTerm
+    val config = maybeGetNewConfiguration(msg.entries.map(_.command), m.config)
+    acceptHeartbeat() applying WithNewConfigEvent(Some(replicatedLog.lastTerm), config)
   }
 
   def leaderIsLagging(msg: AppendEntries[Command], m: Meta): Boolean =
@@ -124,20 +123,20 @@ private[raft] trait Follower {
     AppendSuccessful(replicatedLog.lastTerm, replicatedLog.lastIndex)
   }
 
-  /**
+  /*
    * Configurations must be used by each node right away when they get appended to their logs (doesn't matter if not committed).
-   * This method updates the Meta object if a configuration change is discovered.
-   */
-  @tailrec final def maybeUpdateConfiguration(meta: Meta, entries: Seq[Command]): Meta = entries match {
+   * Returns new configuration if its discovered.
+  */
+  @tailrec final def maybeGetNewConfiguration(entries: Seq[Command], config: ClusterConfiguration): ClusterConfiguration = entries match {
     case Nil =>
-      meta
+      config
 
-    case (newConfig: ClusterConfiguration) :: moreEntries if newConfig.isNewerThan(meta.config) =>
+    case (newConfig: ClusterConfiguration) :: moreEntries if newConfig.isNewerThan(config) =>
       log.info("Appended new configuration (seq: {}), will start using it now: {}", newConfig.sequenceNumber, newConfig)
-      maybeUpdateConfiguration(meta.withConfig(newConfig), moreEntries)
+      maybeGetNewConfiguration(moreEntries, config)
 
     case _ :: moreEntries =>
-      maybeUpdateConfiguration(meta, moreEntries)
+      maybeGetNewConfiguration(moreEntries, config)
   }
   
   def commitUntilLeadersIndex(m: Meta, msg: AppendEntries[Command]): ReplicatedLog[Command] = {
