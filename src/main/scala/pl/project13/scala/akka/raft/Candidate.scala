@@ -100,6 +100,7 @@ private[raft] trait Candidate {
     case Event(ElectionTimeout, m: ElectionMeta) if m.config.members.size > 1 =>
       log.info("Voting timeout, starting a new election (among {})...", m.config.members.size)
       m.clusterSelf ! BeginElection
+      resetElectionDeadline()
       stay() using m.forNewElection
 
     // would like to start election, but I'm all alone! ;-(
