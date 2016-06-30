@@ -1,9 +1,7 @@
 package pl.project13.scala.akka.raft
 
-import pl.project13.scala.akka.raft.protocol._
 import org.scalatest.concurrent.Eventually
-import scala.concurrent.duration._
-import org.scalatest.time.{Seconds, Millis, Span}
+import org.scalatest.time.{Millis, Seconds, Span}
 
 class LeaderElectionTest extends RaftSpec(callingThreadDispatcher = false)
   with Eventually {

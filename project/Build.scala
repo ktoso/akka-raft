@@ -36,7 +36,7 @@ object ApplicationBuild extends Build {
 }
 
 object Dependencies {
-    val akkaVersion = "2.4.0"
+    val akkaVersion = "2.4.4"
     val generalDependencies = Seq(
       "com.typesafe.akka" %% "akka-actor"     % akkaVersion,
       "com.typesafe.akka" %% "akka-slf4j"     % akkaVersion,
@@ -46,6 +46,9 @@ object Dependencies {
 
       "com.typesafe.akka" %% "akka-testkit"            % akkaVersion % "test",
       "com.typesafe.akka" %% "akka-multi-node-testkit" % akkaVersion % "test",
+
+      "org.iq80.leveldb" % "leveldb" % "0.7",
+      "org.fusesource.leveldbjni" % "leveldbjni-all" % "1.8",
 
       "org.mockito"        % "mockito-core"   % "1.9.5"     % "test",
       "org.scalatest"     %% "scalatest"      % "2.2.1"     % "test"

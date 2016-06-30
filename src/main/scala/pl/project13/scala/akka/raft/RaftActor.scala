@@ -1,15 +1,17 @@
 package pl.project13.scala.akka.raft
 
-import akka.actor.{Actor, ActorRef, LoggingFSM}
-import scala.concurrent.duration._
-
-import model._
-import protocol._
-import scala.concurrent.forkjoin.ThreadLocalRandom
+import akka.actor.Actor
+import akka.persistence.fsm.PersistentFSM
 import pl.project13.scala.akka.raft.compaction.LogCompactionExtension
 import pl.project13.scala.akka.raft.config.RaftConfiguration
+import pl.project13.scala.akka.raft.model._
+import pl.project13.scala.akka.raft.protocol._
 
-abstract class RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
+import scala.concurrent.duration._
+import scala.concurrent.forkjoin.ThreadLocalRandom
+import scala.reflect._
+
+abstract class RaftActor extends Actor with PersistentFSM[RaftState, Meta, DomainEvent]
   with ReplicatedStateMachine
   with Follower with Candidate with Leader with SharedBehaviors {
 
@@ -42,6 +44,23 @@ abstract class RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
   // end of raft member state --------------
 
   val heartbeatInterval: FiniteDuration = raftConfig.heartbeatInterval
+
+
+  override implicit def domainEventClassTag: ClassTag[DomainEvent] = classTag[DomainEvent]
+
+  override def persistenceId = "RaftActor-" + self.path.name
+
+  override def applyEvent(domainEvent: DomainEvent, data: Meta): Meta = domainEvent match  {
+    case GoToFollowerEvent(term) => term.fold(data.forFollower())(t => data.forFollower(t))
+    case GoToLeaderEvent() => data.forLeader
+    case StartElectionEvent() => data.forNewElection
+    case KeepStateEvent() => data
+    case VoteForEvent(candidate) => data.withVoteFor(candidate)
+    case IncrementVoteEvent() => data.incVote
+    case VoteForSelfEvent() => data.incVote.withVoteFor(data.clusterSelf)
+    case WithNewConfigEvent(term, config) => term.fold(data.withConfig(config))(t => data.withConfig(config).withTerm(t))
+    case WithNewClusterSelf(s) => data.copy(clusterSelf = s)
+  }
 
   def nextElectionDeadline(): Deadline = randomElectionTimeout(
     from = raftConfig.electionTimeoutMin,
@@ -119,15 +138,15 @@ abstract class RaftActor extends Actor with LoggingFSM[RaftState, Metadata]
 
     if (m.config.members.isEmpty) {
       // cluster is still discovering nodes, keep waiting
-      goto(Follower) using m
+      goto(Follower) applying KeepStateEvent()
     } else {
-      goto(Candidate) using m.forNewElection forMax nextElectionDeadline().timeLeft
+      goto(Candidate) applying StartElectionEvent() forMax nextElectionDeadline().timeLeft
     }
   }
 
   /** Stop being the Leader */
-  def stepDown(m: LeaderMeta) = {
-    goto(Follower) using m.forFollower
+  def stepDown(m: Meta) = {
+    goto(Follower) applying GoToFollowerEvent()
   }
 
   /** Stay in current state and reset the election timeout */
