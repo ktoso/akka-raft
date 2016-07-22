@@ -13,6 +13,11 @@ private[raft] trait Follower {
   protected def raftConfig: RaftConfig
 
   val followerBehavior: StateFunction = {
+
+    case Event(msg @ BeginAsFollower, m : Meta) =>
+      if (raftConfig.publishTestingEvents) context.system.eventStream.publish(msg)
+      stay()
+
     case Event(msg: ClientMessage[Command], m: Meta) =>
       log.info("Follower got {} from client; Respond with last Leader that took write from: {}", msg, recentlyContactedByLeader)
       sender() ! LeaderIs(recentlyContactedByLeader, Some(msg))

@@ -1,112 +1,157 @@
 package pl.project13.scala.akka.raft
 
+import akka.testkit.ImplicitSender
+import org.scalatest.BeforeAndAfterEach
 import pl.project13.scala.akka.raft.protocol._
-import akka.testkit.{ImplicitSender, TestProbe, TestFSMRef}
-import org.scalatest.{OneInstancePerTest, BeforeAndAfterEach}
-import concurrent.duration._
-import scala.collection.immutable
-import pl.project13.scala.akka.raft.example.WordConcatRaftActor
-import pl.project13.scala.akka.raft.model.{Entry, Term}
 
 class FollowerTest extends RaftSpec with BeforeAndAfterEach
   with ImplicitSender {
 
   behavior of "Follower"
 
-  val follower = TestFSMRef(new SnapshottingWordConcatRaftActor)
+  val initialMembers = 3
 
-  var data: Meta = _
-  
-  val initialMembers = 0
-
-  override def beforeEach() {
-    super.beforeEach()
-    data = Meta.initial(follower)
-      .copy(
-        currentTerm = Term(2),
-        config = ClusterConfiguration(self)
-      )
-
-    follower.underlyingActor.resetElectionDeadline()
-  }
 
   it should "reply with Vote if Candidate has later Term than it" in {
     // given
-    follower.setState(Follower, data)
 
-    // when
-    follower ! RequestVote(Term(2), self, Term(2), 2)
+    subscribeBeginAsFollower()
 
-    // then
-    expectMsg(VoteCandidate(Term(2)))
+    info("Waiting for the follower...")
+    val msg = awaitBeginAsFollower()
+
+    val follower = msg.ref
+    val msgTerm = msg.term
+    info(s"Member $follower become a follower in $msgTerm")
+
+    val nextTerm = msgTerm.next
+    info(s"Requesting vote from member in a higher term $nextTerm...")
+    follower ! RequestVote(nextTerm, self, msgTerm, 2)
+
+    fishForMessage() {
+      case msg @ VoteCandidate(term) if term == nextTerm => true
+      case _ => false
+    }
   }
+
 
   it should "Reject if Candidate has lower Term than it" in {
     // given
-    follower.setState(Follower, data)
+
+    restartMember()
+    subscribeBeginAsFollower()
+
+    info("Waiting for the follower...")
+    val msg = awaitBeginAsFollower()
+    val follower = msg.ref
+    val msgTerm = msg.term
+
+    info(s"Member $follower become a follower in $msgTerm")
+    val prevTerm = msgTerm.prev
 
     // when
-    follower ! RequestVote(Term(1), self, Term(1), 1)
+    info(s"Requesting vote from member with a stale term $prevTerm...")
+    follower ! RequestVote(prevTerm, self, prevTerm, 1)
 
     // then
-    expectMsg(DeclineCandidate(Term(2)))
+    expectMsg(DeclineCandidate(msg.term))
   }
 
   it should "only vote once during a Term" in {
     // given
-    follower.setState(Follower, data)
+
+    restartMember()
+    subscribeBeginAsFollower()
+
+    info("Waiting for the follower...")
+    val msg = awaitBeginAsFollower()
+    val follower = msg.ref
+    val msgTerm = msg.term
+
+    info(s"Member $follower become a follower in $msgTerm")
 
     // when / then
-    follower ! RequestVote(Term(2), self, Term(2), 2)
-    expectMsg(VoteCandidate(Term(2)))
+    info(s"Requesting vote from member within current term $msgTerm for the first time")
+    follower ! RequestVote(msg.term, self, msg.term, 2)
+    expectMsg(VoteCandidate(msg.term))
 
-    follower ! RequestVote(Term(2), self, Term(2), 2)
-    expectMsg(DeclineCandidate(Term(2)))
+    info(s"Requesting vote from member within current term $msgTerm for the second time")
+    follower ! RequestVote(msg.term, self, msg.term, 2)
+    expectMsg(DeclineCandidate(msg.term))
   }
 
+
   it should "update term number after getting a request with higher term number" in {
-    follower.setState(Follower, data)
 
-    follower ! RequestVote(Term(3), self, Term(3), 3)
-    expectMsg(VoteCandidate(Term(3)))
+    restartMember()
+    subscribeBeginAsFollower()
+    subscribeTermUpdated()
 
-    follower.stateData.currentTerm shouldBe Term(3)
+    info("Waiting for the follower...")
+    val msg = awaitBeginAsFollower()
+    val follower = msg.ref
+    val msgTerm = msg.term
+
+    info(s"Member $follower become a follower in $msgTerm")
+
+
+    val nextTerm = msgTerm.next
+
+    info(s"Requesting vote from member with a newer term $nextTerm")
+    follower ! RequestVote(nextTerm, self, nextTerm, 3)
+    expectMsg(VoteCandidate(nextTerm))
+
+    probe.fishForMessage() {
+      case TermUpdated(term, actor) if term == nextTerm && actor == follower => true
+      case _ => false
+    }
   }
 
   it should "become a Candidate if the electionTimeout has elapsed" in {
     // given
-    follower.setState(Follower, data)
+
+    restartMember()
+    subscribeBeginAsFollower()
+    subscribeBeginElection()
 
     // when
-    info("After awaiting for election timeout...")
+    info("Waiting for the follower...")
+    val msg = awaitBeginAsFollower()
+    val follower = msg.ref
+    val term = msg.term
 
-    // then
-    eventually {
-      follower.stateName should equal (Candidate)
+    info(s"Member $follower become a follower in $term")
+
+    info("After awaiting for election timeout...")
+    probe.fishForMessage() {
+      case ElectionStarted(actor) if actor == follower => true
+      case _ => false
     }
   }
 
-  it should "amortize taking the same write twice, the log should not contain duplicates then" in {
-    // given
-    data = Meta.initial(follower)
-      .copy(
-        currentTerm = Term(0),
-        config = ClusterConfiguration(self)
-      )
-    follower.setState(Follower, data)
 
-    val msg = AppendEntries(Term(1), Term(0), 1, immutable.Seq(Entry("a", Term(1), 1)), 0)
+  /*it should "amortize taking the same write twice, the log should not contain duplicates then" in {
+    restartMember()
+    // given
+
+    subscribeBeginAsFollower()
+    val m = awaitBeginAsFollower()
+    val follower = m.ref
+    val t = m.term
+    info(s"$t")
+
+    val msg = AppendEntries(t, t, 1, immutable.Seq(Entry("a", t, 1)), 0)
 
     // when
     info("Sending Append(a)")
-    follower.tell(msg, probe.ref)
+    follower ! msg
 
     info("Sending Append(a)")
-    follower.tell(msg, probe.ref)
+    follower ! msg
 
     // then
-    probe.expectMsg(AppendSuccessful(Term(1), 1))
-    probe.expectMsg(AppendSuccessful(Term(1), 1))
-  }
+    expectMsg(AppendSuccessful(t, 1))
+    expectMsg(AppendSuccessful(t, 1))
+  }*/
 
 }

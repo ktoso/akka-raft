@@ -51,7 +51,10 @@ abstract class RaftActor extends Actor with PersistentFSM[RaftState, Meta, Domai
   override def persistenceId = "RaftActor-" + self.path.name
 
   override def applyEvent(domainEvent: DomainEvent, data: Meta): Meta = domainEvent match  {
-    case GoToFollowerEvent(term) => term.fold(data.forFollower())(t => data.forFollower(t))
+    case GoToFollowerEvent(term) => term.fold(data.forFollower()) {t =>
+      if (raftConfig.publishTestingEvents) context.system.eventStream.publish(TermUpdated(t, self))
+      data.forFollower(t)
+    }
     case GoToLeaderEvent() => data.forLeader
     case StartElectionEvent() => data.forNewElection
     case KeepStateEvent() => data
@@ -60,6 +63,9 @@ abstract class RaftActor extends Actor with PersistentFSM[RaftState, Meta, Domai
     case VoteForSelfEvent() => data.incVote.withVoteFor(data.clusterSelf)
     case WithNewConfigEvent(term, config) => term.fold(data.withConfig(config))(t => data.withConfig(config).withTerm(t))
     case WithNewClusterSelf(s) => data.copy(clusterSelf = s)
+    case UpdateTermEvent(term) =>
+      if (raftConfig.publishTestingEvents) context.system.eventStream.publish(TermUpdated(term, self))
+      data.withTerm(term)
   }
 
   def nextElectionDeadline(): Deadline = randomElectionTimeout(
@@ -83,6 +89,7 @@ abstract class RaftActor extends Actor with PersistentFSM[RaftState, Meta, Domai
 
   onTransition {
     case Init -> Follower if stateData.clusterSelf != self =>
+      self ! BeginAsFollower(stateData.currentTerm, self)
       log.info("Cluster self != self => Running clustered via a proxy.")
       resetElectionDeadline()
 
@@ -95,6 +102,7 @@ abstract class RaftActor extends Actor with PersistentFSM[RaftState, Meta, Domai
       cancelElectionDeadline()
 
     case _ -> Follower =>
+      self ! BeginAsFollower(stateData.currentTerm, self)
       resetElectionDeadline()
   }
 

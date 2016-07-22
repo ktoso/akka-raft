@@ -18,7 +18,9 @@ private[raft] trait Candidate {
       stay()
 
     // election
-    case Event(BeginElection, m: Meta) =>
+    case Event(msg @ BeginElection, m: Meta) =>
+      if(raftConfig.publishTestingEvents) context.system.eventStream.publish(ElectionStarted(self))
+
       if (m.config.members.isEmpty) {
         log.warning("Tried to initialize election with no members...")
         goto(Follower) applying GoToFollowerEvent()

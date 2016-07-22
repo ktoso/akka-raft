@@ -1,24 +1,21 @@
 package pl.project13.scala.akka.raft
 
-import org.scalatest._
-import akka.testkit.{ImplicitSender, TestProbe, TestFSMRef, TestKit}
-import akka.actor._
 import java.util.concurrent.TimeUnit
-import akka.fsm.hack.TestFSMRefHack
-import pl.project13.scala.akka.raft.example.WordConcatRaftActor
+
+import akka.actor._
+import akka.testkit.{ImplicitSender, TestFSMRef, TestKit, TestProbe}
+import org.scalatest._
 import org.scalatest.concurrent.Eventually
 import org.scalatest.time.{Millis, Seconds, Span}
+import pl.project13.scala.akka.raft.example.WordConcatRaftActor
 
-/**
- * @param callingThreadDispatcher if true, will run using one thread. Use this for FSM tests, otherwise set to false to
- *                                enable a "really threading" dispatcher (see config for `raft-dispatcher`).
- */
-abstract class RaftSpec(callingThreadDispatcher: Boolean = true, _system: Option[ActorSystem] = None)
-  extends TestKit(_system getOrElse ActorSystem("raft-test"))
-  with ImplicitSender with Eventually
-  with FlatSpecLike with Matchers with BeforeAndAfterAll with BeforeAndAfterEach {
+import scala.util.Random
 
-  import protocol._
+abstract class RaftSpec(_system: Option[ActorSystem] = None) extends TestKit(_system getOrElse ActorSystem("raft-test"))
+  with ImplicitSender with Eventually with FlatSpecLike with Matchers
+  with BeforeAndAfterAll with BeforeAndAfterEach with PersistenceCleanup {
+
+  import pl.project13.scala.akka.raft.protocol._
 
   val DefaultTimeout = 5
 
@@ -31,7 +28,7 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true, _system: Option
   )
   
   // notice the EventStreamAllMessages, thanks to this we're able to wait for messages like "leader elected" etc.
-  protected var _members: Vector[TestFSMRef[RaftState, Metadata, SnapshottingWordConcatRaftActor]] = Vector.empty
+  protected var _members: Vector[ActorRef] = Vector.empty
 
   def initialMembers: Int
 
@@ -60,26 +57,15 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true, _system: Option
    * > Use the "real" one for feature tests, so actors won't block each other in the CallingThread.
    * > Use the CallingThreadDispatcher for FSM tests, such as [[pl.project13.scala.akka.raft.CandidateTest]]
    */
-  def createActor(name: String): TestFSMRef[RaftState, Metadata, SnapshottingWordConcatRaftActor] = {
-    val actor =
-      if (callingThreadDispatcher)
-        TestFSMRef(
-          (new WordConcatRaftActor with EventStreamAllMessages).asInstanceOf[SnapshottingWordConcatRaftActor], // hack, bleh
-          name = name
-        )
-      else
-        TestFSMRefHack[RaftState, Metadata, SnapshottingWordConcatRaftActor](
-          Props(new WordConcatRaftActor with EventStreamAllMessages).withDispatcher("raft-dispatcher"),
-          name = name
-        )
-
+  def createActor(name: String): ActorRef = {
+    val actor = system.actorOf(Props(new WordConcatRaftActor).withDispatcher("raft-dispatcher"), name)
     _members :+= actor
     actor
   }
 
   override def beforeEach() {
     super.beforeEach()
-
+    persistenceCleanup()
     probe = TestProbe()
   }
 
@@ -88,44 +74,13 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true, _system: Option
     super.afterEach()
   }
 
-  def maybeLeader() = _members.find(_.stateName == Leader)
-
-  def leader() = maybeLeader getOrElse {
-    throw new RuntimeException("Unable to find leader! members: " + _members)
-  }
-
-  def leaders() =
-    members().filter(_.stateName == Leader)
-
-  def members() =
-    _members
-
-  def followers() =
-    _members.filter(m => m.stateName == Follower)
-
-  def follower(name: String) =
-    _members.find(_.path.elements.last == name).get
-
-  def candidates() =
-    _members.filter(m => m.stateName == Candidate)
-
   def simpleName(ref: ActorRef) = {
-    import collection.JavaConverters._
+    import scala.collection.JavaConverters._
     ref.path.getElements.asScala.last
   }
 
   def infoMemberStates() {
-    info(s"Members: ${members().map(m => s"""${simpleName(m)}[${m.stateName}]""").mkString(", ")}")
-  }
-
-  // cluster management
-
-  def killLeader() = {
-    val leaderToStop = leader()
-    _members = _members filterNot { _ == leaderToStop }
-    leaderToStop.stop()
-    info(s"Killed leader: ${simpleName(leaderToStop)}")
-    leaderToStop
+    //info(s"Members: ${members().map(m => s"""${simpleName(m)}[${m.stateName}]""").mkString(", ")}")
   }
 
   def killMember(member: TestFSMRef[RaftState, Metadata, SnapshottingWordConcatRaftActor]) = {
@@ -137,12 +92,14 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true, _system: Option
     member
   }
 
-  def restartMember(member: TestFSMRef[RaftState, Metadata, SnapshottingWordConcatRaftActor]) = {
-    createActor(member.path.elements.last)
-    info(s"Started member: ${simpleName(member)}")
-    Thread.sleep(10)
+  def restartMember(member: ActorRef = _members(Random.nextInt(_members.size))) = {
+    probe.watch(member)
+    system.stop(member)
+    _members = _members.filterNot(_ == member)
+    probe.expectTerminated(member)
 
-    member
+    val newMember = createActor(member.path.name)
+    newMember
   }
 
   // await stuff -------------------------------------------------------------------------------------------------------
@@ -154,10 +111,27 @@ abstract class RaftSpec(callingThreadDispatcher: Boolean = true, _system: Option
     probe.expectMsgClass(max, ElectedAsLeader.getClass)
 
   def subscribeBeginElection()(implicit probe: TestProbe): Unit =
-    system.eventStream.subscribe(probe.ref, BeginElection.getClass)
+    //system.eventStream.subscribe(probe.ref, BeginElection.getClass)
+    system.eventStream.subscribe(probe.ref, classOf[ElectionStarted])
+
+  def subscribeElectionStarted()(implicit probe: TestProbe): Unit =
+    system.eventStream.subscribe(probe.ref, classOf[ElectionStarted])
+
+  def subscribeBeginAsFollower()(implicit probe: TestProbe): Unit =
+    system.eventStream.subscribe(probe.ref, classOf[BeginAsFollower])
+
+  def subscribeTermUpdated()(implicit probe: TestProbe): Unit =
+    system.eventStream.subscribe(probe.ref, classOf[TermUpdated])
 
   def awaitBeginElection(max: FiniteDuration = DefaultTimeoutDuration)(implicit probe: TestProbe): Unit =
     probe.expectMsgClass(max, BeginElection.getClass)
+
+  def awaitBeginAsFollower(max: FiniteDuration = DefaultTimeoutDuration)
+                          (implicit probe: TestProbe): BeginAsFollower =
+    probe.expectMsgClass(max, classOf[BeginAsFollower])
+
+
+
 
   def subscribeEntryComitted()(implicit probe: TestProbe): Unit =
     system.eventStream.subscribe(probe.ref, classOf[EntryCommitted])

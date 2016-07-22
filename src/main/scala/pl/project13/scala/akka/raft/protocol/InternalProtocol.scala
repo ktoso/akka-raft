@@ -11,6 +11,8 @@ private[protocol] trait InternalProtocol extends Serializable {
   sealed trait ElectionMessage  extends Message[Internal]
   sealed trait LeaderMessage    extends Message[Internal]
 
+  case class BeginAsFollower(term: Term, ref: ActorRef) extends InternalMessage
+
   case object BeginElection     extends ElectionMessage
   case class VoteCandidate(term: Term)    extends ElectionMessage
   case class DeclineCandidate(term: Term) extends ElectionMessage
@@ -38,5 +40,7 @@ private[protocol] trait InternalProtocol extends Serializable {
   // ----    testing and monitoring messages     ----
   case class EntryCommitted(idx: Int, on: ActorRef) extends Message[Testing]
   case class SnapshotWritten(initialSize: Int, compactedSize: Int) extends Message[Testing]
+  case class TermUpdated(term: Term, on: ActorRef) extends Message[Testing]
+  case class ElectionStarted(on: ActorRef) extends Message[Testing]
   // ---- end of testing and monitoring messages ----
 }
