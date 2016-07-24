@@ -14,7 +14,8 @@ private[raft] trait Leader {
   private val HeartbeatTimerName = "heartbeat-timer"
 
   val leaderBehavior: StateFunction = {
-    case Event(ElectedAsLeader, m: Meta) =>
+    case Event(msg @ BeginAsLeader(term, _), m: Meta) =>
+      if (raftConfig.publishTestingEvents) context.system.eventStream.publish(msg)
       log.info("Became leader for {}", m.currentTerm)
       initializeLeaderState(m.config.members)
       startHeartbeat(m)

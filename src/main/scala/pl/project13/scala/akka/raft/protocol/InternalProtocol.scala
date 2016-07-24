@@ -17,7 +17,7 @@ private[protocol] trait InternalProtocol extends Serializable {
   case class VoteCandidate(term: Term)    extends ElectionMessage
   case class DeclineCandidate(term: Term) extends ElectionMessage
 
-  case object ElectedAsLeader   extends ElectionMessage
+  case class BeginAsLeader(term: Term, ref: ActorRef)   extends ElectionMessage
   case object ElectionTimeout    extends ElectionMessage
 
   /** When the Leader has sent an append, for an unexpected number, the Follower replies with this */

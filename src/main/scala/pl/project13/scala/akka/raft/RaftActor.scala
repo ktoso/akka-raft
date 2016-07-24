@@ -46,7 +46,7 @@ abstract class RaftActor extends Actor with PersistentFSM[RaftState, Meta, Domai
   val heartbeatInterval: FiniteDuration = raftConfig.heartbeatInterval
 
 
-  override implicit def domainEventClassTag: ClassTag[DomainEvent] = classTag[DomainEvent]
+  override def domainEventClassTag: ClassTag[DomainEvent] = classTag[DomainEvent]
 
   override def persistenceId = "RaftActor-" + self.path.name
 
@@ -98,7 +98,7 @@ abstract class RaftActor extends Actor with PersistentFSM[RaftState, Meta, Domai
       resetElectionDeadline()
 
     case Candidate -> Leader =>
-      self ! ElectedAsLeader
+      self ! BeginAsLeader(stateData.currentTerm, self)
       cancelElectionDeadline()
 
     case _ -> Follower =>

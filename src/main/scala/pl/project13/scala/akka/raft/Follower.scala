@@ -14,7 +14,7 @@ private[raft] trait Follower {
 
   val followerBehavior: StateFunction = {
 
-    case Event(msg @ BeginAsFollower, m : Meta) =>
+    case Event(msg @ BeginAsFollower(term, _), m : Meta) =>
       if (raftConfig.publishTestingEvents) context.system.eventStream.publish(msg)
       stay()
 

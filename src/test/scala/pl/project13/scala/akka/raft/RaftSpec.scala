@@ -7,6 +7,7 @@ import akka.testkit.{ImplicitSender, TestFSMRef, TestKit, TestProbe}
 import org.scalatest._
 import org.scalatest.concurrent.Eventually
 import org.scalatest.time.{Millis, Seconds, Span}
+import pl.project13.scala.akka.raft.StateTransitionMonitoringActor._
 import pl.project13.scala.akka.raft.example.WordConcatRaftActor
 
 import scala.util.Random
@@ -40,13 +41,16 @@ abstract class RaftSpec(_system: Option[ActorSystem] = None) extends TestKit(_sy
 
   var raftConfiguration: ClusterConfiguration = _
 
+  var stateTransitionActor: ActorRef = _
+
   override def beforeAll() {
     super.beforeAll()
-
     (1 to initialMembers).toList foreach { i => createActor(s"raft-member-$i") }
 
     raftConfiguration = ClusterConfiguration(_members)
     _members foreach { _ ! ChangeConfiguration(raftConfiguration) }
+
+    stateTransitionActor = system.actorOf(Props(classOf[StateTransitionMonitoringActor]))
   }
 
 
@@ -83,16 +87,19 @@ abstract class RaftSpec(_system: Option[ActorSystem] = None) extends TestKit(_sy
     //info(s"Members: ${members().map(m => s"""${simpleName(m)}[${m.stateName}]""").mkString(", ")}")
   }
 
-  def killMember(member: TestFSMRef[RaftState, Metadata, SnapshottingWordConcatRaftActor]) = {
-    system stop member
-    _members = _members filterNot { _ == member }
-    info(s"Killed member: ${simpleName(member)}")
-    Thread.sleep(10)
-
-    member
+  def killLeader() = {
+    leaders.headOption.map { leader =>
+      stateTransitionActor ! RemoveMember(leader)
+      probe.watch(leader)
+      system.stop(leader)
+      probe.expectTerminated(leader)
+      _members = _members.filterNot(_ == leader)
+    }
   }
 
   def restartMember(member: ActorRef = _members(Random.nextInt(_members.size))) = {
+    stateTransitionActor ! RemoveMember(member)
+
     probe.watch(member)
     system.stop(member)
     _members = _members.filterNot(_ == member)
@@ -102,16 +109,40 @@ abstract class RaftSpec(_system: Option[ActorSystem] = None) extends TestKit(_sy
     newMember
   }
 
+  def leaders = {
+    stateTransitionActor.tell(GetLeaders, probe.ref)
+    val msg = probe.expectMsgClass(classOf[Leaders])
+    msg.leaders
+  }
+
+  def candidates = {
+    stateTransitionActor.tell(GetCandidates, probe.ref)
+    val msg = probe.expectMsgClass(classOf[Candidates])
+    msg.candidates
+  }
+
+  def followers = {
+    stateTransitionActor.tell(GetFollowers, probe.ref)
+    val msg = probe.expectMsgClass(classOf[Followers])
+    msg.followers
+  }
+
   // await stuff -------------------------------------------------------------------------------------------------------
 
-  def subscribeElectedLeader()(implicit probe: TestProbe): Unit =
-    system.eventStream.subscribe(probe.ref, ElectedAsLeader.getClass)
+  def subscribeClusterStateTransitions(): Unit =
+    stateTransitionActor ! Subscribe(_members)
 
-  def awaitElectedLeader(max: FiniteDuration = DefaultTimeoutDuration)(implicit probe: TestProbe): Unit =
-    probe.expectMsgClass(max, ElectedAsLeader.getClass)
+  def unsubscribeClusterStateTransitions(): Unit =
+    stateTransitionActor ! Unsubscribe
+
+
+  def subscribeBeginAsLeader()(implicit probe: TestProbe): Unit =
+    system.eventStream.subscribe(probe.ref, classOf[BeginAsLeader])
+
+  def awaitBeginAsLeader(max: FiniteDuration = DefaultTimeoutDuration)(implicit probe: TestProbe): BeginAsLeader =
+    probe.expectMsgClass(max, classOf[BeginAsLeader])
 
   def subscribeBeginElection()(implicit probe: TestProbe): Unit =
-    //system.eventStream.subscribe(probe.ref, BeginElection.getClass)
     system.eventStream.subscribe(probe.ref, classOf[ElectionStarted])
 
   def subscribeElectionStarted()(implicit probe: TestProbe): Unit =
