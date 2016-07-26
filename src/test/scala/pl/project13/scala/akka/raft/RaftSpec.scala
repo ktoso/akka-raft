@@ -109,6 +109,8 @@ abstract class RaftSpec(_system: Option[ActorSystem] = None) extends TestKit(_sy
     newMember
   }
 
+  def members = _members
+
   def leaders = {
     stateTransitionActor.tell(GetLeaders, probe.ref)
     val msg = probe.expectMsgClass(classOf[Leaders])

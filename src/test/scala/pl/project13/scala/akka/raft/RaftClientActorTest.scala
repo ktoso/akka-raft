@@ -3,7 +3,7 @@ package pl.project13.scala.akka.raft
 import org.scalatest.time.{Seconds, Millis, Span}
 import pl.project13.scala.akka.raft.example.protocol._
 
-class RaftClientActorTest extends RaftSpec(callingThreadDispatcher = false) {
+class RaftClientActorTest extends RaftSpec {
 
   behavior of "RaftClientActor"
 
@@ -13,8 +13,8 @@ class RaftClientActorTest extends RaftSpec(callingThreadDispatcher = false) {
 
   it should "find out Leader of cluster, when pointed to any member of it (already elected leader)" in {
     // given
-    subscribeElectedLeader()
-    awaitElectedLeader()
+    subscribeBeginAsLeader()
+    awaitBeginAsLeader()
     info("Cluster state when joining raft-client: ")
     infoMemberStates()
 
