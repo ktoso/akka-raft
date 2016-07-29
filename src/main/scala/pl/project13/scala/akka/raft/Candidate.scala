@@ -19,7 +19,7 @@ private[raft] trait Candidate {
 
     // election
     case Event(msg @ BeginElection, m: Meta) =>
-      if(raftConfig.publishTestingEvents) context.system.eventStream.publish(ElectionStarted(self))
+      if(raftConfig.publishTestingEvents) context.system.eventStream.publish(ElectionStarted(m.currentTerm, self))
 
       if (m.config.members.isEmpty) {
         log.warning("Tried to initialize election with no members...")

@@ -41,6 +41,6 @@ private[protocol] trait InternalProtocol extends Serializable {
   case class EntryCommitted(idx: Int, on: ActorRef) extends Message[Testing]
   case class SnapshotWritten(initialSize: Int, compactedSize: Int) extends Message[Testing]
   case class TermUpdated(term: Term, on: ActorRef) extends Message[Testing]
-  case class ElectionStarted(on: ActorRef) extends Message[Testing]
+  case class ElectionStarted(term: Term, on: ActorRef) extends Message[Testing]
   // ---- end of testing and monitoring messages ----
 }

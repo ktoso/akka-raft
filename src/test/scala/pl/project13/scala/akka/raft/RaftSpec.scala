@@ -45,12 +45,14 @@ abstract class RaftSpec(_system: Option[ActorSystem] = None) extends TestKit(_sy
 
   override def beforeAll() {
     super.beforeAll()
+    stateTransitionActor = system.actorOf(Props(classOf[StateTransitionMonitoringActor]))
+
     (1 to initialMembers).toList foreach { i => createActor(s"raft-member-$i") }
 
     raftConfiguration = ClusterConfiguration(_members)
     _members foreach { _ ! ChangeConfiguration(raftConfiguration) }
 
-    stateTransitionActor = system.actorOf(Props(classOf[StateTransitionMonitoringActor]))
+
   }
 
 
@@ -63,6 +65,7 @@ abstract class RaftSpec(_system: Option[ActorSystem] = None) extends TestKit(_sy
    */
   def createActor(name: String): ActorRef = {
     val actor = system.actorOf(Props(new WordConcatRaftActor).withDispatcher("raft-dispatcher"), name)
+    stateTransitionActor ! AddMember(actor)
     _members :+= actor
     actor
   }
@@ -97,7 +100,8 @@ abstract class RaftSpec(_system: Option[ActorSystem] = None) extends TestKit(_sy
     }
   }
 
-  def restartMember(member: ActorRef = _members(Random.nextInt(_members.size))) = {
+  def restartMember(_member: Option[ActorRef] = None) = {
+    val member = _member.getOrElse(_members(Random.nextInt(_members.size)))
     stateTransitionActor ! RemoveMember(member)
 
     probe.watch(member)
@@ -158,6 +162,9 @@ abstract class RaftSpec(_system: Option[ActorSystem] = None) extends TestKit(_sy
 
   def awaitBeginElection(max: FiniteDuration = DefaultTimeoutDuration)(implicit probe: TestProbe): Unit =
     probe.expectMsgClass(max, BeginElection.getClass)
+
+  def awaitElectionStarted(max: FiniteDuration = DefaultTimeoutDuration)(implicit probe: TestProbe): ElectionStarted =
+    probe.expectMsgClass(max, classOf[ElectionStarted])
 
   def awaitBeginAsFollower(max: FiniteDuration = DefaultTimeoutDuration)
                           (implicit probe: TestProbe): BeginAsFollower =
