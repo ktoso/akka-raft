@@ -124,7 +124,7 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
 
     info("After awaiting for election timeout...")
     probe.fishForMessage() {
-      case ElectionStarted(actor) if actor == follower => true
+      case ElectionStarted(_, actor) if actor == follower => true
       case _ => false
     }
   }

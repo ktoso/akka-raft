@@ -3,7 +3,7 @@ package pl.project13.scala.akka.raft
 import java.util.concurrent.TimeUnit
 
 import akka.actor._
-import akka.testkit.{ImplicitSender, TestFSMRef, TestKit, TestProbe}
+import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import org.scalatest._
 import org.scalatest.concurrent.Eventually
 import org.scalatest.time.{Millis, Seconds, Span}
@@ -51,8 +51,6 @@ abstract class RaftSpec(_system: Option[ActorSystem] = None) extends TestKit(_sy
 
     raftConfiguration = ClusterConfiguration(_members)
     _members foreach { _ ! ChangeConfiguration(raftConfiguration) }
-
-
   }
 
 
@@ -87,7 +85,11 @@ abstract class RaftSpec(_system: Option[ActorSystem] = None) extends TestKit(_sy
   }
 
   def infoMemberStates() {
-    //info(s"Members: ${members().map(m => s"""${simpleName(m)}[${m.stateName}]""").mkString(", ")}")
+    val leadersList = leaders.map(m => s"${simpleName(m)}[Leader]")
+    val candidatesList = candidates.map(m => s"${simpleName(m)}[Candidate]")
+    val followersList = followers.map(m => s"${simpleName(m)}[Follower]")
+    val members = (leadersList ++ candidatesList ++ followersList).mkString(",")
+    info(s"Members: $members")
   }
 
   def killLeader() = {

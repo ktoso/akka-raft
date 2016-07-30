@@ -2,7 +2,7 @@ package pl.project13.scala.akka.raft
 
 import pl.project13.scala.akka.raft.protocol._
 
-class ClusterMembershipChangeTest extends RaftSpec(callingThreadDispatcher = false) {
+class ClusterMembershipChangeTest extends RaftSpec with PersistenceCleanup {
 
   behavior of "Cluster membership change"
 
@@ -13,14 +13,14 @@ class ClusterMembershipChangeTest extends RaftSpec(callingThreadDispatcher = fal
 
   it should "allow to add additional servers" in {
     // given
-    subscribeElectedLeader()
-    subscribeEntryComitted()
+    subscribeBeginAsLeader()
+    awaitBeginAsLeader()
 
-    awaitElectedLeader()
+    subscribeEntryComitted()
 
     info("Initial state: ")
     infoMemberStates()
-    val initialLeader = leader()
+    val initialLeader = leaders.head
 
     // when
     val additionalActor = createActor(s"raft-member-${initialMembers + 1}")
@@ -32,24 +32,29 @@ class ClusterMembershipChangeTest extends RaftSpec(callingThreadDispatcher = fal
     // but it's also interesting to see in the logs, if propagation goes on properly, no specific test there
     awaitEntryComitted(1)
 
+    system.eventStream.unsubscribe(probe.ref)
     // then
     infoMemberStates()
-    info("leader   : " + leaders().map(simpleName))
-    info("candidate: " + candidates().map(simpleName))
-    info("follower : " + followers().map(simpleName))
+    info("leader   : " + leaders.map(_.path.name))
+    info("candidate: " + candidates.map(_.path.name))
+    info("follower : " + followers.map(_.path.name))
     info("")
 
-    additionalActor.stateName should equal (Follower)
+
 
     eventually {
       infoMemberStates()
-      leaders() should have length 1
-      candidates() should have length 0
-      followers() should have length 5
+      leaders should have length 1
+      candidates should have length 0
+      followers should have length 5
     }
 
     info("After adding raft-member-6, and configuration change: ")
     infoMemberStates()
   }
+
+  override def beforeAll(): Unit =
+    subscribeClusterStateTransitions()
+    super.beforeAll()
 
 }

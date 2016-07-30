@@ -14,5 +14,7 @@ trait PersistenceCleanup {
     "akka.persistence.snapshot-store.local.dir"
   ) map(s => new File(system.settings.config.getString(s)))
 
-  def persistenceCleanup() = journalLocations.foreach(FileUtils.deleteDirectoryContents)
+  def persistenceCleanup() = journalLocations.foreach { dir =>
+    if (dir.exists()) FileUtils.deleteDirectoryContents(dir)
+  }
 }
