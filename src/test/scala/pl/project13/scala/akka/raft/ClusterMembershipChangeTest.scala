@@ -2,7 +2,7 @@ package pl.project13.scala.akka.raft
 
 import pl.project13.scala.akka.raft.protocol._
 
-class ClusterMembershipChangeTest extends RaftSpec with PersistenceCleanup {
+class ClusterMembershipChangeTest extends RaftSpec {
 
   behavior of "Cluster membership change"
 
@@ -14,13 +14,14 @@ class ClusterMembershipChangeTest extends RaftSpec with PersistenceCleanup {
   it should "allow to add additional servers" in {
     // given
     subscribeBeginAsLeader()
-    awaitBeginAsLeader()
+    val msg = awaitBeginAsLeader()
+    val initialLeader = msg.ref
 
     subscribeEntryComitted()
 
     info("Initial state: ")
     infoMemberStates()
-    val initialLeader = leaders.head
+    //val initialLeader = leaders.head
 
     // when
     val additionalActor = createActor(s"raft-member-${initialMembers + 1}")
@@ -39,8 +40,6 @@ class ClusterMembershipChangeTest extends RaftSpec with PersistenceCleanup {
     info("candidate: " + candidates.map(_.path.name))
     info("follower : " + followers.map(_.path.name))
     info("")
-
-
 
     eventually {
       infoMemberStates()

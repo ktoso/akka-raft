@@ -43,10 +43,11 @@ private[raft] trait Leader {
       val meta = maybeUpdateConfiguration(m, entry.command)
       replicateLog(meta)
 
-      if (meta.config.isPartOfNewConfiguration(m.clusterSelf))
-        stay() applying KeepStateEvent()
-      else
+      if (meta.config.isPartOfNewConfiguration(m.clusterSelf)) {
+        stay() applying WithNewConfigEvent(config = meta.config)
+      } else {
         goto(Follower) applying GoToFollowerEvent()
+      }
 
     // rogue Leader handling
     case Event(append: AppendEntries[Command], m: Meta) if append.term > m.currentTerm =>

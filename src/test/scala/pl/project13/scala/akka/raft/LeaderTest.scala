@@ -1,67 +1,50 @@
 package pl.project13.scala.akka.raft
 
-import pl.project13.scala.akka.raft.protocol._
-import akka.testkit.{ImplicitSender, TestKit, TestProbe, TestFSMRef}
+import akka.testkit.ImplicitSender
 import org.scalatest._
-import akka.actor.ActorSystem
-import pl.project13.scala.akka.raft.model.{Term, LogIndexMap}
 import pl.project13.scala.akka.raft.example.protocol._
+import pl.project13.scala.akka.raft.protocol._
 
-class LeaderTest extends TestKit(ActorSystem("test-system")) with FlatSpecLike with Matchers
+class LeaderTest extends RaftSpec with FlatSpecLike with Matchers
   with ImplicitSender
   with BeforeAndAfter with BeforeAndAfterAll {
 
   behavior of "Leader"
 
-  val leader = TestFSMRef(new SnapshottingWordConcatRaftActor)
-
-  var data: Meta = _
-  
-  before {
-    data = Meta.initial(leader)
-      .copy(
-        currentTerm = Term(1),
-        config = ClusterConfiguration(leader)
-      ).forNewElection.forLeader
-  }
+  override def initialMembers: Int = 3
 
   it should "commit an entry once it has been written by the majority of the Followers" in {
-    // given
-    val probe1, probe2, probe3 = TestProbe().ref
+    subscribeBeginAsLeader()
+    val msg = awaitBeginAsLeader()
+    val leader = msg.ref
 
-    data = data.copy(config = ClusterConfiguration(probe1, probe2, probe3))
-    leader.setState(Leader, data)
-    val actor = leader.underlyingActor
+    leader ! ClientMessage(self, AppendWord("a"))
+    leader ! ClientMessage(self, AppendWord("b"))
+    leader ! ClientMessage(self, AppendWord("c"))
 
-    val matchIndex = LogIndexMap.initialize(Set.empty, -1)
-    matchIndex.put(probe1, 2)
-    matchIndex.put(probe2, 2)
-    matchIndex.put(probe3, 1)
-
-    var replicatedLog = actor.replicatedLog
-    replicatedLog += model.Entry(AppendWord("a"), Term(1), 1)
-    replicatedLog += model.Entry(AppendWord("b"), Term(1), 2)
-    replicatedLog += model.Entry(AppendWord("c"), Term(1), 3)
-
-    // when
-    val committedLog = actor.maybeCommitEntry(data, matchIndex, replicatedLog)
-
-    // then
-    actor.replicatedLog.committedIndex should equal (0)
-    committedLog.committedIndex should equal (2)
+    subscribeEntryComitted()
+    awaitEntryComitted(1)
+    awaitEntryComitted(2)
+    awaitEntryComitted(3)
   }
 
   it should "reply with it's current configuration when asked to" in {
     // note: this is used when an actor has died and starts again in Init state
 
-    // given
-    leader.setState(Leader, data)
+    val leader = leaders.head
 
     // when
     leader ! RequestConfiguration
 
     // then
-    expectMsg(ChangeConfiguration(StableClusterConfiguration(0, Set(leader))))
+    val initialMembers = members.toSet
+    fishForMessage() {
+      case ChangeConfiguration(StableClusterConfiguration(0, potentialMembers)) if initialMembers == potentialMembers  => true
+      case msg @ _=> false
+    }
   }
 
+  override def beforeAll(): Unit =
+    subscribeClusterStateTransitions()
+    super.beforeAll()
 }

@@ -2,7 +2,10 @@ package pl.project13.scala.akka.raft
 
 import akka.testkit.ImplicitSender
 import org.scalatest.BeforeAndAfterEach
+import pl.project13.scala.akka.raft.model.Entry
 import pl.project13.scala.akka.raft.protocol._
+
+import scala.collection._
 
 class FollowerTest extends RaftSpec with BeforeAndAfterEach
   with ImplicitSender {
@@ -11,10 +14,34 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
 
   val initialMembers = 3
 
-
-  it should "reply with Vote if Candidate has later Term than it" in {
+  it should "amortize taking the same write twice, the log should not contain duplicates then" in {
     // given
 
+    subscribeBeginAsFollower()
+    val m = awaitBeginAsFollower()
+    val follower = m.ref
+    val t = m.term
+    info(s"$t")
+
+    val msg = AppendEntries(t, t, 1, immutable.Seq(Entry("a", t, 1)), 0)
+
+    // when
+    info("Sending Append(a)")
+    follower ! msg
+
+    info("Sending Append(a)")
+    follower ! msg
+
+    // then
+    expectMsg(AppendSuccessful(t, 1))
+    expectMsg(AppendSuccessful(t, 1))
+  }
+
+
+  it should "reply with Vote if Candidate has later Term than it" in {
+    restartMember()
+
+    // given
     subscribeBeginAsFollower()
 
     info("Waiting for the follower...")
@@ -33,7 +60,6 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
       case _ => false
     }
   }
-
 
   it should "Reject if Candidate has lower Term than it" in {
     // given
@@ -128,30 +154,4 @@ class FollowerTest extends RaftSpec with BeforeAndAfterEach
       case _ => false
     }
   }
-
-
-  /*it should "amortize taking the same write twice, the log should not contain duplicates then" in {
-    restartMember()
-    // given
-
-    subscribeBeginAsFollower()
-    val m = awaitBeginAsFollower()
-    val follower = m.ref
-    val t = m.term
-    info(s"$t")
-
-    val msg = AppendEntries(t, t, 1, immutable.Seq(Entry("a", t, 1)), 0)
-
-    // when
-    info("Sending Append(a)")
-    follower ! msg
-
-    info("Sending Append(a)")
-    follower ! msg
-
-    // then
-    expectMsg(AppendSuccessful(t, 1))
-    expectMsg(AppendSuccessful(t, 1))
-  }*/
-
 }
