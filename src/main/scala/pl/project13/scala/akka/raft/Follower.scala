@@ -13,6 +13,11 @@ private[raft] trait Follower {
   protected def raftConfig: RaftConfig
 
   val followerBehavior: StateFunction = {
+
+    case Event(msg @ BeginAsFollower(term, _), m : Meta) =>
+      if (raftConfig.publishTestingEvents) context.system.eventStream.publish(msg)
+      stay()
+
     case Event(msg: ClientMessage[Command], m: Meta) =>
       log.info("Follower got {} from client; Respond with last Leader that took write from: {}", msg, recentlyContactedByLeader)
       sender() ! LeaderIs(recentlyContactedByLeader, Some(msg))
@@ -133,7 +138,7 @@ private[raft] trait Follower {
 
     case (newConfig: ClusterConfiguration) :: moreEntries if newConfig.isNewerThan(config) =>
       log.info("Appended new configuration (seq: {}), will start using it now: {}", newConfig.sequenceNumber, newConfig)
-      maybeGetNewConfiguration(moreEntries, config)
+      maybeGetNewConfiguration(moreEntries, newConfig)
 
     case _ :: moreEntries =>
       maybeGetNewConfiguration(moreEntries, config)

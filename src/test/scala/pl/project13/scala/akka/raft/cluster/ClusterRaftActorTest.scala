@@ -11,7 +11,7 @@ class ClusterRaftActorTest extends ClusterRaftSpec {
 
   it should "stop when the watched raftActor dies" in {
     // given
-    val member = members().head
+    val member = members.head
     val clusterActor = system.actorOf(ClusterRaftActor.props(member, 1))
 
     probe watch clusterActor

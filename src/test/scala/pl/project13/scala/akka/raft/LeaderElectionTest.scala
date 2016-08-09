@@ -2,9 +2,9 @@ package pl.project13.scala.akka.raft
 
 import org.scalatest.concurrent.Eventually
 import org.scalatest.time.{Millis, Seconds, Span}
+import scala.concurrent.duration._
 
-class LeaderElectionTest extends RaftSpec(callingThreadDispatcher = false)
-  with Eventually {
+class LeaderElectionTest extends RaftSpec with PersistenceCleanup with Eventually {
 
   behavior of "Leader Election"
 
@@ -17,13 +17,13 @@ class LeaderElectionTest extends RaftSpec(callingThreadDispatcher = false)
 
   it should "elect initial Leader" in {
     // given
-    subscribeElectedLeader()
+    subscribeBeginAsLeader()
 
     info("Before election: ")
     infoMemberStates()
 
     // when
-    awaitElectedLeader()
+    awaitBeginAsLeader()
     info("After election: ")
     infoMemberStates()
 
@@ -37,7 +37,7 @@ class LeaderElectionTest extends RaftSpec(callingThreadDispatcher = false)
 
   it should "elect replacement Leader if current Leader dies" in {
     // given
-    subscribeElectedLeader()
+    subscribeBeginAsLeader()
 
     infoMemberStates()
 
@@ -45,7 +45,7 @@ class LeaderElectionTest extends RaftSpec(callingThreadDispatcher = false)
     killLeader()
 
     // then
-    awaitElectedLeader()
+    awaitBeginAsLeader()
     info("New leader elected: ")
     infoMemberStates()
 
@@ -56,26 +56,30 @@ class LeaderElectionTest extends RaftSpec(callingThreadDispatcher = false)
     }
   }
 
+
   it should "be able to maintain the same leader for a long time" in {
     // given
-    subscribeElectedLeader()
+    subscribeBeginAsLeader()
 
     // when
-    val memberStates1 = members().sortBy(_.path.elements.last).map(_.stateName)
+    val potentialLeaderOne = leaders.head
     Thread.sleep(400)
-    val memberStates2 = members().sortBy(_.path.elements.last).map(_.stateName)
+    val potentialLeaderTwo = leaders.head
     Thread.sleep(400)
-    val memberStates3 = members().sortBy(_.path.elements.last).map(_.stateName)
+    val potentialLeaderThree = leaders.head
     Thread.sleep(400)
-    val memberStates4 = members().sortBy(_.path.elements.last).map(_.stateName)
+    val potentialLeaderFour = leaders.head
 
     info("Maintained state:")
     infoMemberStates()
 
     // then
-    memberStates1 should equal (memberStates2)
-    memberStates1 should equal (memberStates3)
-    memberStates1 should equal (memberStates4)
+    potentialLeaderOne should equal (potentialLeaderTwo)
+    potentialLeaderOne should equal (potentialLeaderThree)
+    potentialLeaderOne should equal (potentialLeaderFour)
   }
 
+  override def beforeAll(): Unit =
+    subscribeClusterStateTransitions()
+    super.beforeAll()
 }

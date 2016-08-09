@@ -11,11 +11,13 @@ private[protocol] trait InternalProtocol extends Serializable {
   sealed trait ElectionMessage  extends Message[Internal]
   sealed trait LeaderMessage    extends Message[Internal]
 
+  case class BeginAsFollower(term: Term, ref: ActorRef) extends InternalMessage
+
   case object BeginElection     extends ElectionMessage
   case class VoteCandidate(term: Term)    extends ElectionMessage
   case class DeclineCandidate(term: Term) extends ElectionMessage
 
-  case object ElectedAsLeader   extends ElectionMessage
+  case class BeginAsLeader(term: Term, ref: ActorRef)   extends ElectionMessage
   case object ElectionTimeout    extends ElectionMessage
 
   /** When the Leader has sent an append, for an unexpected number, the Follower replies with this */
@@ -38,5 +40,7 @@ private[protocol] trait InternalProtocol extends Serializable {
   // ----    testing and monitoring messages     ----
   case class EntryCommitted(idx: Int, on: ActorRef) extends Message[Testing]
   case class SnapshotWritten(initialSize: Int, compactedSize: Int) extends Message[Testing]
+  case class TermUpdated(term: Term, on: ActorRef) extends Message[Testing]
+  case class ElectionStarted(term: Term, on: ActorRef) extends Message[Testing]
   // ---- end of testing and monitoring messages ----
 }
