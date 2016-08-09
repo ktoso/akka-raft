@@ -102,6 +102,14 @@ abstract class RaftSpec(_system: Option[ActorSystem] = None) extends TestKit(_sy
     }
   }
 
+  def killMember(member: ActorRef) = {
+      stateTransitionActor ! RemoveMember(member)
+      probe.watch(member)
+      system.stop(member)
+      probe.expectTerminated(member)
+      _members = _members.filterNot(_ == member)
+  }
+
   def restartMember(_member: Option[ActorRef] = None) = {
     val member = _member.getOrElse(_members(Random.nextInt(_members.size)))
     stateTransitionActor ! RemoveMember(member)

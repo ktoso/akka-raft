@@ -16,6 +16,7 @@ class CandidateTest extends RaftSpec with BeforeAndAfterEach
 
   val initialMembers = 3
 
+  // This test is commented because there is no easy way to prevent leader election
   /*it should "start a new election round if electionTimeout reached, and no one became Leader" in {
     // given
 
